@@ -50,3 +50,7 @@ jobs:
           script: |
             cd /home/ramiro_rego/quiz-backend
             ./deploy.sh
+
+      - name: Check application health
+        run: |
+          curl -f https://quiz.ramiro-rego.com/health || (echo "Health check failed" && exit 1)
