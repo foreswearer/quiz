@@ -51,6 +51,16 @@ jobs:
             cd /home/ramiro_rego/quiz-backend
             ./deploy.sh
 
-      - name: Check application health
+      - name: Check application health (with retries)
         run: |
-          curl -f https://quiz.ramiro-rego.com/health || (echo "Health check failed" && exit 1)
+          for i in {1..5}; do
+            echo "Health check attempt \$i..."
+            if curl -f https://quiz.ramiro-rego.com/health; then
+              echo "Health check OK"
+              exit 0
+            fi
+            echo "Health check failed, waiting 5s..."
+            sleep 5
+          done
+          echo "Health check failed after 5 attempts"
+          exit 1
