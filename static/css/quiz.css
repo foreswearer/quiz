@@ -1,0 +1,64 @@
+.page {
+    max-width: 900px;
+    margin: 2rem auto;
+    padding: 0 1rem 3rem;
+}
+
+h1 {
+    font-size: 1.8rem;
+    margin-bottom: 0.25rem;
+}
+
+h2 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.subtitle {
+    opacity: 0.8;
+    margin-bottom: 1.5rem;
+}
+
+.toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.toolbar-buttons {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.question {
+    margin: 1.0rem 0;
+    padding: 0.8rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.question-title {
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+}
+
+.options {
+    margin-top: 0.4rem;
+}
+
+.hidden {
+    display: none;
+}
+
+#result {
+    margin-top: 1.2rem;
+    font-weight: 600;
+}
+
+#error {
+    color: #b91c1c;
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+}

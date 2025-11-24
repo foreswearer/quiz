@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Cloud Digital Leader – Practice Quiz</title>
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/quiz.css">
+
+    <!-- Debug configuration -->
+    <script>
+        window.QUIZ_VERBOSE = true;  // or "1" / false / "0"
+    </script>
+
+    <script defer src="/static/js/quiz.js"></script>
+</head>
+<body>
+<div class="page">
+    <div class="toolbar">
+        <div>
+            <h1>Cloud Digital Leader – Practice Quiz</h1>
+            <div class="subtitle small">
+                You are taking a specific test. Use the menu to go back or end your session.
+            </div>
+        </div>
+        <div class="toolbar-buttons">
+            <button id="btn-home" class="toolbar-btn" type="button">Portal</button>
+            <button id="btn-logout" class="toolbar-btn" type="button">End session</button>
+            <button id="theme-toggle" class="theme-toggle" type="button">Theme</button>
+        </div>
+    </div>
+
+    <div id="quiz-container" class="hidden card">
+        <h2 id="test-title"></h2>
+        <p id="test-description" class="small"></p>
+        <form id="quiz-form">
+            <div id="questions"></div>
+            <button type="submit">Submit answers</button>
+        </form>
+        <div id="result"></div>
+    </div>
+</div>
+</body>
+</html>
