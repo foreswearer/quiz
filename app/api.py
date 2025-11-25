@@ -57,7 +57,7 @@ def available_tests():
         conn.close()
 
 
-@router.get("/tests/{test_id}")
+@router.get("../tests/{test_id}")
 def get_test(test_id: int):
     """
     Get a test definition, including questions and options (with is_correct flag).
@@ -144,7 +144,7 @@ def get_test(test_id: int):
         conn.close()
 
 
-@router.post("/tests/{test_id}/start")
+@router.post("../tests/{test_id}/start")
 def start_test(
     test_id: int,
     student_dni: str = Query(..., description="User DNI / ID (unique in app_user)"),
@@ -467,7 +467,7 @@ def submit_attempt(attempt_id: int, payload: SubmitRequest):
         conn.close()
 
 
-@router.get("/tests/{test_id}/results")
+@router.get("../tests/{test_id}/results")
 def get_test_results(test_id: int):
     """
     Per-test summary and per-student best result.
@@ -676,7 +676,7 @@ def student_attempts(dni: str):
         conn.close()
 
 
-@router.post("/tests/random_from_bank")
+@router.post("../tests/random_from_bank")
 def create_random_test(req: RandomTestRequest):
     """
     Create a random test from the question bank for a given course.
@@ -764,7 +764,7 @@ def create_random_test(req: RandomTestRequest):
 # -------------------------------------------------------------------------
 
 
-@router.delete("/tests/{test_id}")
+@router.delete("../tests/{test_id}")
 def delete_test(
     test_id: int,
     teacher_dni: str = Query(..., description="Teacher DNI (must have role='teacher')"),
@@ -883,7 +883,7 @@ def delete_test(
         conn.close()
 
 
-@router.get("/tests/{test_id}/analytics")
+@router.get("../tests/{test_id}/analytics")
 def test_analytics(test_id: int):
     """
     Teacher-style analytics, but accessible to everyone:
