@@ -27,7 +27,7 @@ jobs:
       - name: Run tests (if present)
         run: |
           if [ -d tests ]; then
-            pytest
+            PYTHONPATH=. pytest
           else
             echo "No tests/ directory, skipping tests."
           fi
