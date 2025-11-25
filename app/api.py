@@ -1163,17 +1163,6 @@ def test_analytics(test_id: int):
     finally:
         conn.close()
 
-from typing import List, Dict, Any, Optional
-
-from fastapi import APIRouter, Query
-
-from .db import get_connection, check_db
-from .schemas import SubmitRequest, RandomTestRequest
-
-router = APIRouter()
-
-# ... existing endpoints ...
-
 
 @router.get("/teacher/dashboard_overview")
 def teacher_dashboard_overview(
