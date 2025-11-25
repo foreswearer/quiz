@@ -57,7 +57,7 @@ def available_tests():
         conn.close()
 
 
-@router.get("../tests/{test_id}")
+@router.get("/tests/{test_id}")
 def get_test(test_id: int):
     """
     Get a test definition, including questions and options (with is_correct flag).
@@ -144,7 +144,7 @@ def get_test(test_id: int):
         conn.close()
 
 
-@router.post("../tests/{test_id}/start")
+@router.post("/tests/{test_id}/start")
 def start_test(
     test_id: int,
     student_dni: str = Query(..., description="User DNI / ID (unique in app_user)"),
@@ -467,7 +467,7 @@ def submit_attempt(attempt_id: int, payload: SubmitRequest):
         conn.close()
 
 
-@router.get("../tests/{test_id}/results")
+@router.get("/tests/{test_id}/results")
 def get_test_results(test_id: int):
     """
     Per-test summary and per-student best result.
@@ -676,7 +676,7 @@ def student_attempts(dni: str):
         conn.close()
 
 
-@router.post("../tests/random_from_bank")
+@router.post("/tests/random_from_bank")
 def create_random_test(req: RandomTestRequest):
     """
     Create a random test from the question bank for a given course.
@@ -764,7 +764,7 @@ def create_random_test(req: RandomTestRequest):
 # -------------------------------------------------------------------------
 
 
-@router.delete("../tests/{test_id}")
+@router.delete("/tests/{test_id}")
 def delete_test(
     test_id: int,
     teacher_dni: str = Query(..., description="Teacher DNI (must have role='teacher')"),
@@ -883,7 +883,7 @@ def delete_test(
         conn.close()
 
 
-@router.get("../tests/{test_id}/analytics")
+@router.get("/tests/{test_id}/analytics")
 def test_analytics(test_id: int):
     """
     Teacher-style analytics, but accessible to everyone:
@@ -1163,3 +1163,228 @@ def test_analytics(test_id: int):
     finally:
         conn.close()
 
+from typing import List, Dict, Any, Optional
+
+from fastapi import APIRouter, Query
+
+from .db import get_connection, check_db
+from .schemas import SubmitRequest, RandomTestRequest
+
+router = APIRouter()
+
+# ... existing endpoints ...
+
+
+@router.get("/teacher/dashboard_overview")
+def teacher_dashboard_overview(
+    teacher_dni: str = Query(..., description="Teacher DNI (must have role='teacher')")
+):
+    """
+    High-level teacher dashboard overview. /tests/
+
+    Returns:
+      - summary: global KPIs
+      - tests: per-test stats
+      - attempts_over_time: daily attempts and average percentage
+      - hardest_questions: questions with the highest wrong rate
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # 1) Check teacher
+            cur.execute(
+                """
+                SELECT id, full_name, role
+                FROM app_user
+                WHERE dni = %s
+                """,
+                (teacher_dni,),
+            )
+            urow = cur.fetchone()
+            if urow is None:
+                return {"error": f"user with DNI {teacher_dni} not found"}
+            teacher_id, teacher_name, role = urow
+            if role != "teacher":
+                return {"error": f"DNI {teacher_dni} is not a teacher"}
+
+            # 2) Global summary KPIs
+            # total students
+            cur.execute(
+                """
+                SELECT COUNT(*) 
+                FROM app_user
+                WHERE role = 'student'
+                """
+            )
+            total_students = cur.fetchone()[0] or 0
+
+            # total tests
+            cur.execute("SELECT COUNT(*) FROM test")
+            total_tests = cur.fetchone()[0] or 0
+
+            # total attempts
+            cur.execute("SELECT COUNT(*) FROM test_attempt")
+            total_attempts = cur.fetchone()[0] or 0
+
+            # attempts last 7 days (graded)
+            cur.execute(
+                """
+                SELECT COUNT(*)
+                FROM test_attempt
+                WHERE status = 'graded'
+                  AND submitted_at >= NOW() - INTERVAL '7 days'
+                """
+            )
+            attempts_last_7_days = cur.fetchone()[0] or 0
+
+            # average percentage (graded attempts only)
+            cur.execute(
+                """
+                SELECT AVG(percentage)
+                FROM test_attempt
+                WHERE status = 'graded'
+                """
+            )
+            avg_percentage_row = cur.fetchone()[0]
+            avg_percentage = (
+                float(avg_percentage_row) if avg_percentage_row is not None else None
+            )
+
+            summary = {
+                "teacher": {
+                    "id": teacher_id,
+                    "name": teacher_name,
+                    "dni": teacher_dni,
+                },
+                "total_students": int(total_students),
+                "total_tests": int(total_tests),
+                "total_attempts": int(total_attempts),
+                "attempts_last_7_days": int(attempts_last_7_days),
+                "avg_percentage": avg_percentage,
+            }
+
+            # 3) Per-test stats
+            cur.execute(
+                """
+                SELECT
+                    t.id,
+                    t.title,
+                    COUNT(ta.id) AS attempts,
+                    AVG(ta.percentage) AS avg_percentage,
+                    MIN(ta.percentage) AS min_percentage,
+                    MAX(ta.percentage) AS max_percentage
+                FROM test t
+                LEFT JOIN test_attempt ta
+                    ON ta.test_id = t.id
+                   AND ta.status = 'graded'
+                GROUP BY t.id, t.title
+                ORDER BY t.id
+                """
+            )
+            rows = cur.fetchall()
+            tests: List[Dict[str, Any]] = []
+            for (
+                test_id,
+                title,
+                attempts,
+                avg_pct,
+                min_pct,
+                max_pct,
+            ) in rows:
+                tests.append(
+                    {
+                        "id": test_id,
+                        "title": title,
+                        "attempts": int(attempts or 0),
+                        "avg_percentage": float(avg_pct)
+                        if avg_pct is not None
+                        else None,
+                        "min_percentage": float(min_pct)
+                        if min_pct is not None
+                        else None,
+                        "max_percentage": float(max_pct)
+                        if max_pct is not None
+                        else None,
+                    }
+                )
+
+            # 4) Attempts over time (graded attempts per day)
+            cur.execute(
+                """
+                SELECT
+                    DATE_TRUNC('day', submitted_at)::date AS day,
+                    COUNT(*) AS attempts,
+                    AVG(percentage) AS avg_percentage
+                FROM test_attempt
+                WHERE status = 'graded'
+                GROUP BY DATE_TRUNC('day', submitted_at)::date
+                ORDER BY day
+                """
+            )
+            rows = cur.fetchall()
+            attempts_over_time: List[Dict[str, Any]] = []
+            for day, attempts, avg_pct in rows:
+                attempts_over_time.append(
+                    {
+                        "day": day.isoformat(),
+                        "attempts": int(attempts or 0),
+                        "avg_percentage": float(avg_pct)
+                        if avg_pct is not None
+                        else None,
+                    }
+                )
+
+            # 5) Hardest questions (highest wrong rate across all tests)
+            cur.execute(
+                """
+                SELECT
+                    sa.question_id,
+                    qb.question_text,
+                    SUM(CASE WHEN sa.is_correct THEN 1 ELSE 0 END) AS correct_count,
+                    SUM(CASE WHEN sa.is_correct THEN 0 ELSE 1 END) AS wrong_count,
+                    COUNT(*) AS total_answers
+                FROM student_answer sa
+                JOIN question_bank qb ON qb.id = sa.question_id
+                JOIN test_attempt ta ON ta.id = sa.attempt_id
+                WHERE ta.status = 'graded'
+                GROUP BY sa.question_id, qb.question_text
+                HAVING COUNT(*) > 0
+                ORDER BY wrong_count DESC
+                LIMIT 10
+                """
+            )
+            rows = cur.fetchall()
+            hardest_questions: List[Dict[str, Any]] = []
+            for (
+                question_id,
+                question_text,
+                correct_count,
+                wrong_count,
+                total_answers,
+            ) in rows:
+                total_answers = total_answers or 0
+                wrong_rate: Optional[float] = None
+                correct_rate: Optional[float] = None
+                if total_answers > 0:
+                    wrong_rate = float(wrong_count) / float(total_answers)
+                    correct_rate = float(correct_count) / float(total_answers)
+                hardest_questions.append(
+                    {
+                        "question_id": question_id,
+                        "text": question_text,
+                        "correct_count": int(correct_count or 0),
+                        "wrong_count": int(wrong_count or 0),
+                        "total_answers": int(total_answers),
+                        "wrong_rate": wrong_rate,
+                        "correct_rate": correct_rate,
+                    }
+                )
+
+            return {
+                "summary": summary,
+                "tests": tests,
+                "attempts_over_time": attempts_over_time,
+                "hardest_questions": hardest_questions,
+            }
+    finally:
+        conn.close()
