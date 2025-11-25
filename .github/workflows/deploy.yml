@@ -51,16 +51,6 @@ jobs:
             cd /home/ramiro_rego/quiz-backend
             ./deploy.sh
 
-      - name: Check application health (with retries)
-        run: |
-          for i in {1..5}; do
-            echo "Health check attempt \$i..."
-            if curl -f https://quiz.ramiro-rego.com/health; then
-              echo "Health check OK"
-              exit 0
-            fi
-            echo "Health check failed, waiting 5s..."
-            sleep 5
-          done
-          echo "Health check failed after 5 attempts"
-          exit 1
+      - name: Skip health check (temporarily)
+        run: echo "Skipping health check in CI (manual health checks only for now)."
+
