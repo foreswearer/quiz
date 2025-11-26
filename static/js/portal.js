@@ -436,34 +436,9 @@
             return;
         }
 
-        try {
-            const resp = await fetch(
-                `/tests/${encodeURIComponent(
-                    testId
-                )}/start?student_dni=${encodeURIComponent(currentDni)}`,
-                { method: "POST" }
-            );
-            dbg("start test response status", resp.status);
-            if (!resp.ok) {
-                const txt = await resp.text();
-                dbg("start test error body", txt);
-                showError("Error starting test: " + txt);
-                return;
-            }
-            const data = await resp.json();
-            dbg("start test response json", data);
-            if (data.error) {
-                showError(data.error);
-                return;
-            }
-
-            // Redirect to quiz page with attempt_id
-            const attemptId = data.attempt_id;
-            window.location.href = `/quiz?attempt_id=${attemptId}`;
-        } catch (e) {
-            dbg("startTest exception", e);
-            showError("Error starting test: " + e);
-        }
+        // Redirect to quiz page with test_id
+        // Quiz page will handle starting the test
+        window.location.href = `/quiz?test_id=${testId}`;
     });
 
     // ---------- Create random test ----------
@@ -503,9 +478,9 @@
                 return;
             }
 
-            // Redirect to quiz page
-            const attemptId = data.attempt_id;
-            window.location.href = `/quiz?attempt_id=${attemptId}`;
+            // Redirect to quiz page with test_id
+            const testId = data.test.id;
+            window.location.href = `/quiz?test_id=${testId}`;
         } catch (e) {
             dbg("createRandomTest exception", e);
             randomInfo.textContent = "Error creating test: " + e;
