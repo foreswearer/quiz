@@ -1,365 +1,530 @@
-// dashboard.js - Teacher Dashboard
-
-let teacherDNI = null;
-let chartsInstances = {}; // Store chart instances for cleanup
-
-// =======================
-// Utility functions
-// =======================
-
-function getCookie(name) {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
-    return null;
-}
-
-function deleteCookie(name) {
-    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
-}
-
-function showError(message) {
-    const errorDiv = document.getElementById('error');
-    errorDiv.textContent = message;
-    errorDiv.classList.remove('hidden');
-}
-
-function hideError() {
-    const errorDiv = document.getElementById('error');
-    errorDiv.classList.add('hidden');
-}
-
-// =======================
-// Theme toggle
-// =======================
-
-function initTheme() {
-    const savedTheme = localStorage.getItem('quiz_theme') || 'light';
-    if (savedTheme === 'dark') {
-        document.body.classList.add('dark');
-        document.getElementById('theme-toggle').textContent = '☀️';
-    } else {
-        document.getElementById('theme-toggle').textContent = '🌙';
+// static/js/quiz.js
+(function () {
+    const VERBOSE = true;
+    function dbg(...args) {
+        if (VERBOSE) console.log("[quiz]", ...args);
     }
 
-    document.getElementById('theme-toggle').addEventListener('click', () => {
-        document.body.classList.toggle('dark');
-        const isDark = document.body.classList.contains('dark');
-        document.getElementById('theme-toggle').textContent = isDark ? '☀️' : '🌙';
-        localStorage.setItem('quiz_theme', isDark ? 'dark' : 'light');
-    });
-}
+    window.addEventListener("error", e =>
+        console.error("[quiz] window error:", e.message, e.error || "")
+    );
+    window.addEventListener("unhandledrejection", e =>
+        console.error("[quiz] unhandledrejection:", e.reason || "")
+    );
 
-// =======================
-// End session
-// =======================
+    dbg("quiz.js loaded");
 
-function initEndSession() {
-    document.getElementById('end-session-btn').addEventListener('click', () => {
-        deleteCookie('quiz_dni');
-        window.location.href = '/';
-    });
-}
-
-// =======================
-// Check teacher access
-// =======================
-
-async function checkTeacherAccess() {
-    teacherDNI = getCookie('quiz_dni');
-    if (!teacherDNI) {
-        showError('No DNI found. Redirecting to portal...');
-        setTimeout(() => window.location.href = '/', 2000);
-        return false;
-    }
-
-    // We'll verify teacher status when fetching dashboard data
-    return true;
-}
-
-// =======================
-// Fetch dashboard data
-// =======================
-
-async function fetchDashboardData() {
-    try {
-        const response = await fetch(`/teacher/dashboard_overview?teacher_dni=${encodeURIComponent(teacherDNI)}`);
-        const data = await response.json();
-
-        if (data.error) {
-            showError(data.error + ' - Redirecting to portal...');
-            setTimeout(() => window.location.href = '/', 2000);
-            return null;
+    // ---------- Cookies (DNI) ----------
+    function setCookie(name, value, days) {
+        let expires = "";
+        if (typeof days === "number") {
+            const d = new Date();
+            d.setTime(d.getTime() + days * 86400000);
+            expires = "; expires=" + d.toUTCString();
         }
-
-        return data;
-    } catch (error) {
-        showError('Failed to fetch dashboard data: ' + error.message);
+        document.cookie =
+            name +
+            "=" +
+            encodeURIComponent(value) +
+            expires +
+            "; path=/; SameSite=Lax";
+    }
+    function getCookie(name) {
+        const nameEQ = name + "=";
+        const parts = document.cookie.split(";");
+        for (let c of parts) {
+            c = c.trim();
+            if (c.indexOf(nameEQ) === 0) {
+                const v = decodeURIComponent(c.substring(nameEQ.length));
+                dbg("getCookie", name, "=", v);
+                return v;
+            }
+        }
+        dbg("getCookie", name, "not found");
         return null;
     }
-}
-
-// =======================
-// Populate KPIs
-// =======================
-
-function populateKPIs(data) {
-    const summary = data.summary;
-
-    document.getElementById('teacher-name').textContent = `Welcome, ${summary.teacher.name}`;
-    document.getElementById('kpi-students').textContent = summary.total_students;
-    document.getElementById('kpi-tests').textContent = summary.total_tests;
-    document.getElementById('kpi-attempts').textContent = summary.total_attempts;
-    document.getElementById('kpi-recent').textContent = summary.attempts_last_7_days;
-
-    const avgPercentage = summary.avg_percentage;
-    if (avgPercentage !== null) {
-        document.getElementById('kpi-avg').textContent = avgPercentage.toFixed(1) + '%';
-    } else {
-        document.getElementById('kpi-avg').textContent = 'N/A';
-    }
-}
-
-// =======================
-// Create charts
-// =======================
-
-function createAttemptsOverTimeChart(data) {
-    const canvas = document.getElementById('chart-attempts-time');
-    const ctx = canvas.getContext('2d');
-
-    // Destroy existing chart if any
-    if (chartsInstances.attemptsTime) {
-        chartsInstances.attemptsTime.destroy();
+    function deleteCookie(name) {
+        document.cookie =
+            name +
+            "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax";
     }
 
-    const attemptsOverTime = data.attempts_over_time || [];
+    // ---------- Theme + nav ----------
+    function initThemeToggle() {
+        const btn = document.getElementById("theme-toggle");
+        if (!btn) return;
 
-    if (attemptsOverTime.length === 0) {
-        canvas.parentElement.innerHTML = '<p class="no-data">No data available</p>';
-        return;
+        const stored = localStorage.getItem("quiz_theme");
+        if (stored === "dark") {
+            document.body.classList.add("dark");
+            btn.textContent = "☀️";
+            dbg("Theme set to dark from storage");
+        } else {
+            btn.textContent = "🌙";
+        }
+
+        btn.addEventListener("click", () => {
+            document.body.classList.toggle("dark");
+            const isDark = document.body.classList.contains("dark");
+            btn.textContent = isDark ? "☀️" : "🌙";
+            localStorage.setItem("quiz_theme", isDark ? "dark" : "light");
+            dbg("Theme toggled, now:", isDark ? "dark" : "light");
+        });
+    }
+    function initNavButtons() {
+        const home = document.getElementById("btn-home");
+        const logout = document.getElementById("btn-logout");
+
+        if (home) {
+            home.addEventListener("click", () => {
+                dbg("Home clicked");
+                window.location.href = "/";
+            });
+        }
+        if (logout) {
+            logout.addEventListener("click", () => {
+                dbg("Logout clicked");
+                deleteCookie("quiz_dni");
+                window.location.href = "/";
+            });
+        }
     }
 
-    const labels = attemptsOverTime.map(d => d.day);
-    const attemptsCounts = attemptsOverTime.map(d => d.attempts);
-    const avgPercentages = attemptsOverTime.map(d => d.avg_percentage || 0);
+    // ---------- State ----------
+    let questionsContainer = null;
+    let quizForm = null;
+    let resultDiv = null;
+    let testTitleElem = null;
+    let currentTestId = null;
+    let currentAttemptId = null;
+    let currentDni = null;
+    let currentQuestions = [];
+    let quizInitialized = false;
 
-    chartsInstances.attemptsTime = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: 'Attempts',
-                    data: attemptsCounts,
-                    borderColor: 'rgb(59, 130, 246)',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    yAxisID: 'y',
-                    tension: 0.2
-                },
-                {
-                    label: 'Avg Score %',
-                    data: avgPercentages,
-                    borderColor: 'rgb(34, 197, 94)',
-                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                    yAxisID: 'y1',
-                    tension: 0.2
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            aspectRatio: 2,
-            interaction: {
-                mode: 'index',
-                intersect: false,
-            },
-            plugins: {
-                legend: {
-                    position: 'top',
-                }
-            },
-            scales: {
-                y: {
-                    type: 'linear',
-                    display: true,
-                    position: 'left',
-                    title: {
-                        display: true,
-                        text: 'Attempts'
-                    }
-                },
-                y1: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                    title: {
-                        display: true,
-                        text: 'Average %'
-                    },
-                    grid: {
-                        drawOnChartArea: false,
-                    },
-                    min: 0,
-                    max: 100
+    function showError(msg) {
+        console.error("[quiz] ERROR:", msg);
+        if (resultDiv) {
+            resultDiv.textContent = msg;
+            resultDiv.style.color = "var(--danger-color)";
+        }
+    }
+    function clearResult() {
+        if (resultDiv) {
+            resultDiv.textContent = "";
+            resultDiv.style.color = "";
+        }
+    }
+    function getTestIdFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        const t = params.get("test_id");
+        dbg("URL test_id =", t);
+        return t;
+    }
+
+    // ---------- Build quiz UI ----------
+    function ensureQuizUi() {
+        if (questionsContainer && quizForm && resultDiv && testTitleElem) {
+            return;
+        }
+        dbg("Building quiz UI");
+
+        const page = document.querySelector(".page") || document.body;
+
+        const card = document.createElement("div");
+        card.className = "card";
+
+        const h2 = document.createElement("h2");
+        h2.id = "test-title";
+        h2.textContent = "Test";
+
+        const form = document.createElement("form");
+        form.id = "quiz-form";
+
+        const qDiv = document.createElement("div");
+        qDiv.id = "questions-container";
+
+        const actions = document.createElement("div");
+        actions.style.marginTop = "0.8rem";
+
+        const submitBtn = document.createElement("button");
+        submitBtn.type = "submit";
+        submitBtn.textContent = "Submit answers";
+
+        actions.appendChild(submitBtn);
+
+        const result = document.createElement("div");
+        result.id = "result";
+        result.style.marginTop = "0.6rem";
+
+        form.appendChild(qDiv);
+        form.appendChild(actions);
+        form.appendChild(result);
+
+        card.appendChild(h2);
+        card.appendChild(form);
+        page.appendChild(card);
+
+        questionsContainer = qDiv;
+        quizForm = form;
+        resultDiv = result;
+        testTitleElem = h2;
+
+        quizForm.addEventListener("submit", submitQuiz);
+    }
+
+    // ---------- Backend calls ----------
+    async function startTest(testId, dni) {
+        dbg("startTest() BEGIN testId=", testId, "dni=", dni);
+        clearResult();
+
+        const url = `/tests/${encodeURIComponent(
+            testId
+        )}/start?student_dni=${encodeURIComponent(dni)}`;
+        dbg("startTest() POST", url);
+
+        const resp = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: null,
+        });
+
+        const textBody = await resp.text();
+        dbg("startTest() status", resp.status, "body =", textBody);
+
+        if (!resp.ok) {
+            throw new Error(
+                "Error starting test (" + resp.status + "): " + textBody
+            );
+        }
+        let data;
+        try {
+            data = JSON.parse(textBody);
+        } catch (e) {
+            console.error("[quiz] Invalid JSON from /start:", e, textBody);
+            throw new Error("Invalid JSON from /start");
+        }
+        dbg("startTest() parsed data =", data);
+        return data;
+    }
+
+    // ---------- Rendering ----------
+    function renderQuestions(test) {
+        dbg("renderQuestions()", test);
+
+        if (!questionsContainer) return;
+        questionsContainer.innerHTML = "";
+
+        if (!test || !Array.isArray(test.questions) || !test.questions.length) {
+            questionsContainer.textContent = "This test has no questions.";
+            return;
+        }
+
+        currentQuestions = test.questions;
+        dbg("Number of questions =", currentQuestions.length);
+
+        test.questions.forEach((q, index) => {
+            const qDiv = document.createElement("div");
+            qDiv.className = "question";
+            qDiv.dataset.questionId = String(q.id);
+
+            const titleDiv = document.createElement("div");
+            titleDiv.className = "question-title";
+            titleDiv.innerHTML =
+                `<span>${index + 1}</span>` + (q.question_text || q.text || "");
+            qDiv.appendChild(titleDiv);
+
+            const optsDiv = document.createElement("div");
+            optsDiv.className = "options";
+
+            const multiple =
+                q.question_type === "multiple_choice" ||
+                q.question_type === "multi" ||
+                q.allow_multiple === true;
+
+            const inputType = multiple ? "checkbox" : "radio";
+
+            (q.options || []).forEach((opt) => {
+                const optId = String(opt.id);
+                const optText = opt.option_text || opt.text || "";
+
+                const label = document.createElement("label");
+                label.className = "option-label";
+                label.dataset.questionId = String(q.id);
+                label.dataset.optionId = optId;
+
+                const input = document.createElement("input");
+                input.type = inputType;
+                input.name = `q_${q.id}`;
+                input.value = optId;
+
+                label.appendChild(input);
+                label.appendChild(document.createTextNode(optText));
+                optsDiv.appendChild(label);
+            });
+
+            qDiv.appendChild(optsDiv);
+            questionsContainer.appendChild(qDiv);
+        });
+    }
+
+    // ---------- Collect answers & feedback ----------
+function collectAnswers() {
+    dbg("collectAnswers()");
+
+    const answers = [];
+    let unanswered = 0;
+
+    currentQuestions.forEach((q) => {
+        const qId = q.id;
+        const selector = `.option-label[data-question-id="${qId}"] input`;
+        const inputs = questionsContainer
+            ? questionsContainer.querySelectorAll(selector)
+            : [];
+
+        const selectedIds = [];
+
+        inputs.forEach((input) => {
+            const el = /** @type {HTMLInputElement} */ (input);
+            if (el.checked) {
+                const raw = el.value;
+                const parsed = parseInt(raw, 10);
+
+                if (Number.isNaN(parsed)) {
+                    // This is the important change: never push NaN
+                    dbg(
+                        "collectAnswers(): NaN option id for question",
+                        qId,
+                        "raw value=",
+                        raw
+                    );
+                } else {
+                    selectedIds.push(parsed);
                 }
             }
+        });
+
+        if (selectedIds.length === 0) {
+            unanswered += 1;
         }
+
+        // Backend expects an INTEGER, never null.
+        // 0 will mean "no answer" (always wrong, but passes validation).
+        const firstSelected = selectedIds.length > 0 ? selectedIds[0] : 0;
+
+        answers.push({
+            question_id: qId,
+            selected_option_id: firstSelected,
+            selected_option_ids: selectedIds,
+        });
     });
-}
 
-function createTestScoresChart(data) {
-    const canvas = document.getElementById('chart-test-scores');
-    const ctx = canvas.getContext('2d');
-
-    // Destroy existing chart if any
-    if (chartsInstances.testScores) {
-        chartsInstances.testScores.destroy();
+    dbg("collectAnswers() -> answers payload:", answers);
+    return answers;
     }
 
-    const tests = data.tests || [];
-
-    if (tests.length === 0) {
-        canvas.parentElement.innerHTML = '<p class="no-data">No data available</p>';
-        return;
+    function clearOptionFeedback() {
+        if (!questionsContainer) return;
+        const labels = questionsContainer.querySelectorAll(".option-label");
+        labels.forEach((label) =>
+            label.classList.remove("correct-option", "wrong-option")
+        );
     }
 
-    // Only show tests with attempts
-    const testsWithAttempts = tests.filter(t => t.attempts > 0);
+    function applyFeedback(perQuestion) {
+        dbg("applyFeedback()", perQuestion);
+        clearOptionFeedback();
 
-    if (testsWithAttempts.length === 0) {
-        canvas.parentElement.innerHTML = '<p class="no-data">No tests with attempts yet</p>';
-        return;
+        if (!Array.isArray(perQuestion) || !perQuestion.length) return;
+
+        perQuestion.forEach((item) => {
+            const qId = item.question_id;
+
+            const correctArray =
+                item.correct_option_ids != null
+                    ? item.correct_option_ids
+                    : item.correct_option_id != null
+                    ? [item.correct_option_id]
+                    : [];
+            const selectedArray =
+                item.selected_option_ids != null
+                    ? item.selected_option_ids
+                    : item.selected_option_id != null
+                    ? [item.selected_option_id]
+                    : [];
+
+            const correctIds = new Set(correctArray.map((x) => String(x)));
+            const selectedIds = new Set(selectedArray.map((x) => String(x)));
+
+            dbg(
+                "applyFeedback(): qId=",
+                qId,
+                "correctIds=",
+                Array.from(correctIds),
+                "selectedIds=",
+                Array.from(selectedIds)
+            );
+
+            const labels = questionsContainer.querySelectorAll(
+                `.option-label[data-question-id="${qId}"]`
+            );
+
+            labels.forEach((label) => {
+                const optId = label.dataset.optionId;
+                const isCorrect = correctIds.has(optId);
+                const isSelected = selectedIds.has(optId);
+
+                if (isCorrect) label.classList.add("correct-option");
+                if (!isCorrect && isSelected)
+                    label.classList.add("wrong-option");
+            });
+        });
     }
 
-    const labels = testsWithAttempts.map(t => t.title.length > 20 ? t.title.substring(0, 20) + '...' : t.title);
-    const avgScores = testsWithAttempts.map(t => t.avg_percentage || 0);
+    // ---------- Submit quiz ----------
+    async function submitQuiz(event) {
+        event.preventDefault();
+        dbg("submitQuiz()");
 
-    chartsInstances.testScores = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Average Score %',
-                data: avgScores,
-                backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                borderColor: 'rgb(59, 130, 246)',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            aspectRatio: 2,
-            plugins: {
-                legend: {
-                    display: false
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    title: {
-                        display: true,
-                        text: 'Average %'
-                    }
-                }
+        if (!currentTestId || !currentAttemptId) {
+            showError("Test was not properly started.");
+            return;
+        }
+
+        const answers = collectAnswers();
+        if (!answers) return; // user cancelled because of unanswered
+
+        try {
+            const url = `/attempts/${encodeURIComponent(currentAttemptId)}/submit`;
+            dbg("submitQuiz() POST", url, "payload:", {
+                student_dni: currentDni,
+                answers,
+            });
+
+            const resp = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    student_dni: currentDni,
+                    answers,
+                }),
+            });
+
+            const textBody = await resp.text();
+            dbg("submitQuiz() status", resp.status, "body =", textBody);
+
+            if (!resp.ok) {
+                throw new Error(
+                    "Error submitting answers (" + resp.status + "): " + textBody
+                );
             }
+
+            let data;
+            try {
+                data = JSON.parse(textBody);
+            } catch (e) {
+                console.error("[quiz] Invalid JSON from /submit:", e, textBody);
+                throw new Error("Invalid JSON from /submit");
+            }
+
+            dbg("submitQuiz() parsed data:", data);
+
+            const score = data.score != null ? data.score.toFixed(2) : "?";
+            const maxScore =
+                data.max_score != null ? data.max_score.toFixed(2) : "?";
+            const pct =
+                data.percentage != null ? data.percentage.toFixed(1) + "%" : "?";
+
+            if (resultDiv) {
+                resultDiv.style.color = "";
+                resultDiv.innerHTML =
+                    `Result: <strong>${score}/${maxScore}</strong> ` +
+                    `(${pct}) – status: ${data.status || "submitted"}.`;
+            }
+
+            const perQuestion = data.details || data.per_question || [];
+            dbg("submitQuiz() perQuestion for feedback:", perQuestion);
+            applyFeedback(perQuestion);
+        } catch (e) {
+            showError("Error submitting answers: " + e);
         }
-    });
-}
-
-// =======================
-// Populate tables
-// =======================
-
-function populateHardestQuestionsTable(data) {
-    const tbody = document.querySelector('#hardest-questions-table tbody');
-    const questions = data.hardest_questions || [];
-
-    if (questions.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="no-data">No data available</td></tr>';
-        return;
     }
 
-    tbody.innerHTML = '';
-    questions.forEach(q => {
-        const row = document.createElement('tr');
+    // ---------- Init quiz ----------
+    async function initQuiz() {
+        if (quizInitialized) return;
+        quizInitialized = true;
 
-        // Truncate long questions
-        const questionText = q.text.length > 60 ? q.text.substring(0, 60) + '...' : q.text;
-        const wrongRate = q.wrong_rate !== null ? (q.wrong_rate * 100).toFixed(1) + '%' : 'N/A';
+        dbg("initQuiz() start");
+        ensureQuizUi();
 
-        row.innerHTML = `
-            <td title="${q.text}">${questionText}</td>
-            <td>${q.correct_count}</td>
-            <td>${q.wrong_count}</td>
-            <td><strong>${wrongRate}</strong></td>
-        `;
-        tbody.appendChild(row);
-    });
-}
+        const testId = getTestIdFromUrl();
+        if (!testId) {
+            showError("Missing test_id in URL.");
+            return;
+        }
+        currentTestId = testId;
 
-function populateTestSummaryTable(data) {
-    const tbody = document.querySelector('#test-summary-table tbody');
-    const tests = data.tests || [];
+        let dni = getCookie("quiz_dni");
+        if (!dni) {
+            const entered = window.prompt("Enter your ID (DNI) to start the test:");
+            if (!entered || !entered.trim()) {
+                alert("You must identify yourself with your DNI first.");
+                window.location.href = "/";
+                return;
+            }
+            dni = entered.trim();
+            setCookie("quiz_dni", dni, 1);
+        }
+        currentDni = dni;
+        dbg("Using DNI =", currentDni);
 
-    if (tests.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="no-data">No tests available</td></tr>';
-        return;
+        try {
+            const data = await startTest(testId, dni);
+            currentAttemptId = data.attempt_id;
+            dbg("Current attempt_id =", currentAttemptId);
+
+            let test = null;
+
+            if (data.test && Array.isArray(data.test.questions)) {
+                dbg("initQuiz(): using embedded test from /start");
+                test = data.test;
+            } else if (Array.isArray(data.questions)) {
+                dbg("initQuiz(): using top-level questions from /start");
+                test = {
+                    id: data.id || (data.test && data.test.id) || testId,
+                    title:
+                        data.title ||
+                        (data.test && data.test.title) ||
+                        "Test",
+                    questions: data.questions,
+                };
+            } else {
+                dbg("initQuiz(): no questions field, forcing empty");
+                test = { id: testId, title: data.title || "Test", questions: [] };
+            }
+
+            if (!Array.isArray(test.questions)) {
+                dbg(
+                    "initQuiz(): test.questions not array; forcing []",
+                    test.questions
+                );
+                test.questions = [];
+            }
+
+            if (testTitleElem) {
+                testTitleElem.textContent =
+                    test.title || `Test #${test.id || testId}`;
+            }
+            renderQuestions(test);
+        } catch (e) {
+            showError(String(e));
+        }
     }
 
-    tbody.innerHTML = '';
-    tests.forEach(t => {
-        const row = document.createElement('tr');
-
-        const testTitle = t.title.length > 30 ? t.title.substring(0, 30) + '...' : t.title;
-        const avgPct = t.avg_percentage !== null ? t.avg_percentage.toFixed(1) + '%' : 'N/A';
-        const minPct = t.min_percentage !== null ? t.min_percentage.toFixed(1) + '%' : 'N/A';
-        const maxPct = t.max_percentage !== null ? t.max_percentage.toFixed(1) + '%' : 'N/A';
-
-        row.innerHTML = `
-            <td title="${t.title}">${testTitle}</td>
-            <td>${t.attempts}</td>
-            <td>${avgPct}</td>
-            <td>${minPct}</td>
-            <td>${maxPct}</td>
-        `;
-        tbody.appendChild(row);
+    document.addEventListener("DOMContentLoaded", () => {
+        dbg("DOMContentLoaded on quiz page");
+        initThemeToggle();
+        initNavButtons();
+        initQuiz();
     });
-}
-
-// =======================
-// Initialize dashboard
-// =======================
-
-async function initDashboard() {
-    // Check access
-    const hasAccess = await checkTeacherAccess();
-    if (!hasAccess) return;
-
-    // Fetch data
-    const data = await fetchDashboardData();
-    if (!data) return;
-
-    // Populate everything
-    populateKPIs(data);
-    createAttemptsOverTimeChart(data);
-    createTestScoresChart(data);
-    populateHardestQuestionsTable(data);
-    populateTestSummaryTable(data);
-
-    hideError();
-}
-
-// =======================
-// On page load
-// =======================
-
-document.addEventListener('DOMContentLoaded', () => {
-    initTheme();
-    initEndSession();
-    initDashboard();
-});
+})();
