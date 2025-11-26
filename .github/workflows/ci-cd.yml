@@ -60,7 +60,7 @@ jobs:
 
       - name: Deploy with rsync
         run: |
-          rsync -avz --delete \
+          rsync -avz --delete-excluded \
             --exclude='.git/' \
             --exclude='.github/' \
             --exclude='venv/' \
