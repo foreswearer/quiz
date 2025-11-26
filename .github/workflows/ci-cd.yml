@@ -79,31 +79,34 @@ jobs:
             cd /home/ramiro_rego/quiz-backend
             ./deploy.sh
 
-      - name: Health Check
-        run: |
-          echo "Waiting for service to start..."
-          sleep 5
-          # Assuming the service runs on port 8000 and is accessible via the public IP/domain
-          # If not exposed, we might need to curl localhost via ssh, but let's try public first or skip if not applicable.
-          # Since we are in the runner, we can't easily curl localhost on the VM without an SSH tunnel or running curl on the VM.
-          # Let's run curl ON the VM.
-          
-      - name: Remote Health Check
+      - name: Verify Service and Health Check
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            echo "Checking service health..."
-            # Retry a few times
-            for i in {1..5}; do
-              if curl -f http://localhost:8000/docs > /dev/null 2>&1; then
-                echo "Health check passed!"
+            echo "Checking service status..."
+            sudo systemctl status quiz-backend.service --no-pager || true
+            
+            echo "Waiting for service to start..."
+            sleep 10
+            
+            echo "Checking if service is listening on port 8000..."
+            ss -tlnp | grep 8000 || echo "Port 8000 not listening yet"
+            
+            echo "Attempting health check on HTTPS (port 443)..."
+            # Retry health check
+            for i in {1..10}; do
+              if curl -f -k https://localhost/docs > /dev/null 2>&1; then
+                echo "✅ Health check passed!"
                 exit 0
               fi
-              echo "Waiting for service..."
-              sleep 2
+              echo "⏳ Attempt $i/10: Waiting for service..."
+              sleep 3
             done
-            echo "Health check failed!"
+            
+            echo "❌ Health check failed after 10 attempts"
+            echo "Service logs:"
+            sudo journalctl -u quiz-backend.service -n 50 --no-pager
             exit 1
