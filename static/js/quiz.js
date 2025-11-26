@@ -57,12 +57,16 @@
         const stored = localStorage.getItem("quiz_theme");
         if (stored === "dark") {
             document.body.classList.add("dark");
+            btn.textContent = "☀️";
             dbg("Theme set to dark from storage");
+        } else {
+            btn.textContent = "🌙";
         }
 
         btn.addEventListener("click", () => {
             document.body.classList.toggle("dark");
             const isDark = document.body.classList.contains("dark");
+            btn.textContent = isDark ? "☀️" : "🌙";
             localStorage.setItem("quiz_theme", isDark ? "dark" : "light");
             dbg("Theme toggled, now:", isDark ? "dark" : "light");
         });
@@ -524,4 +528,3 @@ function collectAnswers() {
         initQuiz();
     });
 })();
-

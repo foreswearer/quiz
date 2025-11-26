@@ -34,17 +34,19 @@ function hideError() {
 // =======================
 
 function initTheme() {
-    const savedTheme = localStorage.getItem('theme') || 'light';
+    const savedTheme = localStorage.getItem('quiz_theme') || 'light';
     if (savedTheme === 'dark') {
         document.body.classList.add('dark');
         document.getElementById('theme-toggle').textContent = '☀️';
+    } else {
+        document.getElementById('theme-toggle').textContent = '🌙';
     }
 
     document.getElementById('theme-toggle').addEventListener('click', () => {
         document.body.classList.toggle('dark');
         const isDark = document.body.classList.contains('dark');
         document.getElementById('theme-toggle').textContent = isDark ? '☀️' : '🌙';
-        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        localStorage.setItem('quiz_theme', isDark ? 'dark' : 'light');
     });
 }
 

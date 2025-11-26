@@ -18,12 +18,16 @@
     const storedTheme = window.localStorage.getItem("quiz_theme");
     if (storedTheme === "dark") {
         document.body.classList.add("dark");
+        themeToggle.textContent = "☀️";
         dbg("Theme set to dark (from localStorage)");
+    } else {
+        themeToggle.textContent = "🌙";
     }
 
     themeToggle.addEventListener("click", function () {
         document.body.classList.toggle("dark");
         const isDark = document.body.classList.contains("dark");
+        themeToggle.textContent = isDark ? "☀️" : "🌙";
         window.localStorage.setItem("quiz_theme", isDark ? "dark" : "light");
         dbg("Theme toggled, now:", isDark ? "dark" : "light");
     });
