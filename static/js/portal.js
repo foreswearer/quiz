@@ -71,6 +71,7 @@
     // ---------- Navigation buttons ----------
     const homeBtn = document.getElementById("btn-home");
     const logoutBtn = document.getElementById("btn-logout");
+    const dashboardBtn = document.getElementById("btn-dashboard");
 
     homeBtn.addEventListener("click", function () {
         dbg("Home button clicked");
@@ -97,7 +98,21 @@
         deleteTestInfo.textContent = "";
         analyticsOutput.textContent = "";
         teacherPanel.classList.add("hidden");
+        // Hide dashboard button
+        if (dashboardBtn) {
+            dashboardBtn.classList.add("hidden");
+        }
     });
+
+    // Dashboard button (teacher only)
+    if (dashboardBtn) {
+        dashboardBtn.addEventListener("click", function () {
+            dbg("Dashboard button clicked");
+            window.location.href = "/dashboard";
+        });
+        // Hide by default, will show when teacher logs in
+        dashboardBtn.classList.add("hidden");
+    }
 
     // ---------- DOM references ----------
     const dniInput = document.getElementById("student-dni");
@@ -204,9 +219,9 @@
     }
 
     function renderAttemptsTable(attempts) {
-        dbg("renderAttemptsTable() attempts:", attempts ? attempts.length : 0);
+        dbg("renderAttemptsTable() with", attempts.length, "attempts");
         attemptsTableBody.innerHTML = "";
-        if (!attempts || attempts.length === 0) {
+        if (attempts.length === 0) {
             attemptsEmpty.classList.remove("hidden");
             attemptsTableWrapper.classList.add("hidden");
             return;
@@ -215,233 +230,285 @@
         attemptsTableWrapper.classList.remove("hidden");
 
         attempts.forEach((a) => {
-            const tr = document.createElement("tr");
-            const date = a.submitted_at ? a.submitted_at.substring(0, 10) : "";
-            const pct = a.percentage != null ? a.percentage.toFixed(1) : "";
-            const score =
-                a.score != null && a.max_score != null
-                    ? `${a.score.toFixed(2)}/${a.max_score.toFixed(2)}`
-                    : "";
+            const row = document.createElement("tr");
+            const score = a.score != null ? a.score.toFixed(2) : "-";
+            const maxScore = a.max_score != null ? a.max_score.toFixed(2) : "-";
+            const percentage = a.percentage != null ? a.percentage.toFixed(1) : "-";
+            const submittedStr = a.submitted_at
+                ? new Date(a.submitted_at).toLocaleString()
+                : "-";
 
-            tr.innerHTML = `
-                <td>${date}</td>
-                <td>${a.test_title}</td>
+            row.innerHTML = `
+                <td>${a.test_title || "N/A"}</td>
                 <td>${a.attempt_number}</td>
-                <td>${score}</td>
-                <td>${pct}</td>
-                <td>${a.status}</td>
+                <td>${score} / ${maxScore}</td>
+                <td>${percentage}%</td>
+                <td>${submittedStr}</td>
             `;
-            attemptsTableBody.appendChild(tr);
+            attemptsTableBody.appendChild(row);
         });
     }
 
     function renderAttemptsChart(attempts) {
-        dbg("renderAttemptsChart() attempts:", attempts ? attempts.length : 0);
-        const graded = (attempts || []).filter((a) => a.percentage != null);
-        const labels = graded.map((a, idx) => `#${a.attempt_number} (${idx + 1})`);
-        const data = graded.map((a) => a.percentage);
-
+        dbg("renderAttemptsChart() with", attempts.length, "attempts");
         if (attemptsChart) {
             attemptsChart.destroy();
             attemptsChart = null;
         }
-
-        if (graded.length === 0) {
-            dbg("renderAttemptsChart() no graded attempts");
+        if (attempts.length === 0) {
             return;
         }
 
-        const ctx = attemptsChartCanvas.getContext("2d");
-        attemptsChart = new Chart(ctx, {
+        const data = attempts.map((a, idx) => ({
+            x: idx + 1,
+            y: a.percentage != null ? a.percentage : 0,
+            label: a.test_title || "N/A",
+        }));
+
+        attemptsChart = new Chart(attemptsChartCanvas, {
             type: "line",
             data: {
-                labels: labels,
+                labels: data.map((d) => d.x),
                 datasets: [
                     {
-                        label: "Percentage",
-                        data: data,
+                        label: "Score %",
+                        data: data.map((d) => d.y),
+                        borderColor: "rgb(37, 99, 235)",
+                        backgroundColor: "rgba(37, 99, 235, 0.1)",
                         tension: 0.2,
                     },
                 ],
             },
             options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false,
+                    },
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
                         max: 100,
+                        title: {
+                            display: true,
+                            text: "Score %",
+                        },
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: "Attempt #",
+                        },
                     },
                 },
             },
         });
-        dbg("renderAttemptsChart() chart created");
     }
 
     function formatPodiumHtml(analytics) {
-        const parts = [];
-        const single = analytics.podium_best_single || [];
-        const avg = analytics.podium_best_average || [];
+        const podBest = analytics.podium_best_single || [];
+        const podAvg = analytics.podium_best_average || [];
 
-        if (single.length > 0) {
-            parts.push("<strong>Best single score:</strong>");
-            single.forEach((p, idx) => {
-                const pct =
-                    p.best_percentage != null
-                        ? p.best_percentage.toFixed(1) + "%"
-                        : "";
-                parts.push(`${idx + 1}. ${p.name} – ${pct}`);
-            });
+        const linesBest = ["<strong>🏆 Best single attempt:</strong>"];
+        if (podBest.length === 0) {
+            linesBest.push("(no data yet)");
         } else {
-            parts.push("<strong>Best single score:</strong> no data yet.");
+            podBest.forEach((s, i) => {
+                const pct =
+                    s.best_percentage != null ? s.best_percentage.toFixed(1) : "-";
+                linesBest.push(`${i + 1}. ${s.name} – ${pct}%`);
+            });
         }
 
-        parts.push("<br>");
-
-        if (avg.length > 0) {
-            parts.push("<strong>Best average score:</strong>");
-            avg.forEach((p, idx) => {
-                const pct =
-                    p.avg_percentage != null
-                        ? p.avg_percentage.toFixed(1) + "%"
-                        : "";
-                parts.push(`${idx + 1}. ${p.name} – ${pct}`);
-            });
+        const linesAvg = ["<strong>📊 Best average:</strong>"];
+        if (podAvg.length === 0) {
+            linesAvg.push("(no data yet)");
         } else {
-            parts.push("<strong>Best average score:</strong> no data yet.");
+            podAvg.forEach((s, i) => {
+                const pct =
+                    s.avg_percentage != null ? s.avg_percentage.toFixed(1) : "-";
+                linesAvg.push(`${i + 1}. ${s.name} – ${pct}%`);
+            });
         }
 
-        return parts.join("<br>");
+        return linesBest.join("<br>") + "<br><br>" + linesAvg.join("<br>");
     }
 
-    // ---------- Load dashboard for a DNI ----------
-    async function loadDashboard(dni) {
-        dbg("loadDashboard() start for DNI", dni);
+    // ---------- Load dashboard for DNI ----------
+    loadDashboardBtn.addEventListener("click", async function () {
         errorDiv.textContent = "";
         randomInfo.textContent = "";
         podiumInfo.textContent = "";
         deleteTestInfo.textContent = "";
         analyticsOutput.textContent = "";
 
-        try {
-            const [testsData, attemptsData] = await Promise.all([
-                fetchAvailableTests(),
-                fetchStudentAttempts(dni),
-            ]);
+        const dni = dniInput.value.trim();
+        dbg("Load dashboard button clicked, DNI=", dni);
+        if (!dni) {
+            showError("Please enter your DNI.");
+            return;
+        }
 
+        try {
+            // Store DNI in cookie
+            setCookie("quiz_dni", dni, 7);
+            currentDni = dni;
+
+            // Fetch tests
+            const testsData = await fetchAvailableTests();
+            populateTestsSelect(testsData.tests || []);
+
+            // Fetch attempts
+            const attemptsData = await fetchStudentAttempts(dni);
             if (attemptsData.error) {
-                dbg("loadDashboard() attemptsData.error", attemptsData.error);
                 showError(attemptsData.error);
                 return;
             }
 
-            currentDni = dni;
-            currentRole = attemptsData.student.role || "student";
-            dbg(
-                "loadDashboard() success",
-                "role=",
-                currentRole,
-                "attempts=",
-                attemptsData.attempts ? attemptsData.attempts.length : 0
-            );
+            const attempts = attemptsData.attempts || [];
+            renderAttemptsTable(attempts);
+            renderAttemptsChart(attempts);
 
-            // Save DNI in cookie (1 day). No consent banner, just do it.
-            setCookie("quiz_dni", dni, 1);
+            // Check role from first attempt (if any)
+            currentRole = null;
+            if (attempts.length > 0) {
+                // We don't have role in attempts, need to get from user
+                // For now, check if DNI matches teacher pattern
+                // Better: fetch user info from a /user/{dni} endpoint
+            }
 
+            // Show dashboard
             dashboard.classList.remove("hidden");
-            studentInfo.textContent =
-                `${attemptsData.student.name} ` +
-                `(DNI: ${attemptsData.student.dni}, ` +
-                `${attemptsData.student.email}, role: ${currentRole})`;
 
-            populateTestsSelect(testsData.tests || []);
-            renderAttemptsTable(attemptsData.attempts || []);
-            renderAttemptsChart(attemptsData.attempts || []);
+            // Infer role: if DNI matches known teacher pattern, show teacher panel
+            // For demo: check if this is a teacher by attempting to fetch teacher dashboard
+            try {
+                const teacherCheck = await fetch(
+                    `/teacher/dashboard_overview?teacher_dni=${encodeURIComponent(dni)}`
+                );
+                if (teacherCheck.ok) {
+                    const teacherData = await teacherCheck.json();
+                    if (!teacherData.error) {
+                        currentRole = "teacher";
+                        teacherPanel.classList.remove("hidden");
+                        // Show dashboard button
+                        if (dashboardBtn) {
+                            dashboardBtn.classList.remove("hidden");
+                        }
+                        studentInfo.textContent = `Welcome, ${teacherData.summary.teacher.name} (Teacher)`;
+                    }
+                }
+            } catch (e) {
+                dbg("Teacher check failed", e);
+            }
 
-            // Teacher panel visibility
-            if (currentRole === "teacher") {
-                dbg("Enabling teacher panel");
-                teacherPanel.classList.remove("hidden");
-            } else {
-                dbg("Hiding teacher panel (role:", currentRole, ")");
+            if (currentRole !== "teacher") {
+                currentRole = "student";
                 teacherPanel.classList.add("hidden");
+                if (dashboardBtn) {
+                    dashboardBtn.classList.add("hidden");
+                }
+                studentInfo.textContent = `Welcome, ${dni} (Student)`;
             }
         } catch (e) {
-            dbg("loadDashboard() exception", e);
-            showError(String(e));
+            dbg("loadDashboard exception", e);
+            showError("Error loading dashboard: " + e.message);
         }
-    }
-
-    // ---------- Event handlers ----------
-    loadDashboardBtn.addEventListener("click", function () {
-        const dni = dniInput.value.trim();
-        dbg("Load dashboard button clicked, DNI=", dni);
-        if (!dni) {
-            showError("You must enter your ID (DNI).");
-            return;
-        }
-        loadDashboard(dni);
     });
 
-    startSelectedBtn.addEventListener("click", function () {
-        dbg("Start selected test button clicked");
-        if (!currentDni) {
-            showError("Load your dashboard first.");
-            return;
-        }
+    // ---------- Start selected test ----------
+    startSelectedBtn.addEventListener("click", async function () {
+        errorDiv.textContent = "";
         const testId = testSelect.value;
+        dbg("Start selected test clicked, testId=", testId);
         if (!testId) {
             showError("Select a test first.");
             return;
         }
-        dbg("Navigating to quiz page with test_id=", testId);
-        window.location.href = `/quiz?test_id=${encodeURIComponent(testId)}`;
-    });
-
-    createRandomBtn.addEventListener("click", async function () {
-        randomInfo.textContent = "";
-        dbg("Create random test button clicked");
         if (!currentDni) {
             showError("Load your dashboard first.");
             return;
         }
-        const n = parseInt(numQuestionsInput.value || "20", 10);
-        dbg("Random test num_questions=", n);
-        const payload = {
-            student_dni: currentDni,
-            num_questions: isNaN(n) ? 20 : n,
-            course_code: "2526-45810-A",
-        };
+
+        try {
+            const resp = await fetch(
+                `/tests/${encodeURIComponent(
+                    testId
+                )}/start?student_dni=${encodeURIComponent(currentDni)}`,
+                { method: "POST" }
+            );
+            dbg("start test response status", resp.status);
+            if (!resp.ok) {
+                const txt = await resp.text();
+                dbg("start test error body", txt);
+                showError("Error starting test: " + txt);
+                return;
+            }
+            const data = await resp.json();
+            dbg("start test response json", data);
+            if (data.error) {
+                showError(data.error);
+                return;
+            }
+
+            // Redirect to quiz page with attempt_id
+            const attemptId = data.attempt_id;
+            window.location.href = `/quiz?attempt_id=${attemptId}`;
+        } catch (e) {
+            dbg("startTest exception", e);
+            showError("Error starting test: " + e);
+        }
+    });
+
+    // ---------- Create random test ----------
+    createRandomBtn.addEventListener("click", async function () {
+        randomInfo.textContent = "";
+        const numQuestions = parseInt(numQuestionsInput.value, 10);
+        dbg("Create random test clicked, numQuestions=", numQuestions);
+        if (isNaN(numQuestions) || numQuestions < 1) {
+            randomInfo.textContent = "Enter a valid number of questions (>=1).";
+            return;
+        }
+        if (!currentDni) {
+            randomInfo.textContent = "Load your dashboard first.";
+            return;
+        }
+
         try {
             const resp = await fetch("/tests/random_from_bank", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
+                body: JSON.stringify({
+                    student_dni: currentDni,
+                    num_questions: numQuestions,
+                }),
             });
-            dbg("create_random_test response status", resp.status);
+            dbg("create random test response status", resp.status);
             if (!resp.ok) {
                 const txt = await resp.text();
-                dbg("create_random_test error body", txt);
+                dbg("create random test error body", txt);
                 randomInfo.textContent = "Error creating test: " + txt;
                 return;
             }
             const data = await resp.json();
-            dbg("create_random_test response json", data);
+            dbg("create random test response json", data);
             if (data.error) {
                 randomInfo.textContent = data.error;
                 return;
             }
-            randomInfo.textContent =
-                `Created test #${data.test_id} (${data.num_questions} questions). ` +
-                `You can now start it from the list.`;
 
-            const testsData = await fetchAvailableTests();
-            populateTestsSelect(testsData.tests || []);
+            // Redirect to quiz page
+            const attemptId = data.attempt_id;
+            window.location.href = `/quiz?attempt_id=${attemptId}`;
         } catch (e) {
-            dbg("create_random_test exception", e);
+            dbg("createRandomTest exception", e);
             randomInfo.textContent = "Error creating test: " + e;
         }
     });
 
-    // Podium for everyone
+    // View podium
     viewPodiumBtn.addEventListener("click", async function () {
         podiumInfo.textContent = "";
         const testId = testSelect.value;
@@ -497,7 +564,7 @@
         }
         try {
             const resp = await fetch(
-                `/tests/${encodeURIComponent(
+                `/teacher/delete_test/${encodeURIComponent(
                     testId
                 )}?teacher_dni=${encodeURIComponent(currentDni)}`,
                 { method: "DELETE" }
@@ -515,11 +582,7 @@
                 deleteTestInfo.textContent = data.error;
                 return;
             }
-            deleteTestInfo.textContent =
-                `Deleted test #${data.deleted_test_id} ` +
-                `("${data.deleted_test_title}") ` +
-                `– attempts: ${data.deleted_attempts}, ` +
-                `answers: ${data.deleted_answers}.`;
+            deleteTestInfo.textContent = data.message || "Test deleted successfully.";
 
             // Refresh tests list
             const testsData = await fetchAvailableTests();
@@ -650,4 +713,3 @@
         dbg("No quiz_dni cookie found on load");
     }
 })();
-

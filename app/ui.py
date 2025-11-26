@@ -17,3 +17,8 @@ def portal():
 @router.get("/quiz", include_in_schema=False)
 def quiz_page():
     return FileResponse(os.path.join(TEMPLATES_DIR, "quiz.html"))
+
+
+@router.get("/dashboard", include_in_schema=False)
+def dashboard_page():
+    return FileResponse(os.path.join(TEMPLATES_DIR, "dashboard.html"))

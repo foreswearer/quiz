@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Dashboard - Quiz Platform</title>
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="page">
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div>
+                <h1>Teacher Dashboard</h1>
+                <p class="subtitle" id="teacher-name">Loading...</p>
+            </div>
+            <div class="toolbar-buttons">
+                <button class="toolbar-btn" onclick="window.location.href='/'">Portal</button>
+                <button class="toolbar-btn" id="end-session-btn">End Session</button>
+                <button class="theme-toggle" id="theme-toggle">🌙</button>
+            </div>
+        </div>
+
+        <!-- Summary KPIs -->
+        <div class="card">
+            <h2>Overview</h2>
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-value" id="kpi-students">-</div>
+                    <div class="kpi-label">Total Students</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value" id="kpi-tests">-</div>
+                    <div class="kpi-label">Total Tests</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value" id="kpi-attempts">-</div>
+                    <div class="kpi-label">Total Attempts</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value" id="kpi-recent">-</div>
+                    <div class="kpi-label">Last 7 Days</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value" id="kpi-avg">-</div>
+                    <div class="kpi-label">Average Score</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row 1 -->
+        <div class="two-columns">
+            <div class="card">
+                <h2>Attempts Over Time</h2>
+                <canvas id="chart-attempts-time"></canvas>
+            </div>
+            <div class="card">
+                <h2>Average Score by Test</h2>
+                <canvas id="chart-test-scores"></canvas>
+            </div>
+        </div>
+
+        <!-- Charts Row 2 -->
+        <div class="two-columns">
+            <div class="card">
+                <h2>Hardest Questions (Top 10)</h2>
+                <div class="table-container">
+                    <table id="hardest-questions-table">
+                        <thead>
+                            <tr>
+                                <th>Question</th>
+                                <th>Correct</th>
+                                <th>Wrong</th>
+                                <th>Wrong Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="4" class="loading-text">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Test Performance Summary</h2>
+                <div class="table-container">
+                    <table id="test-summary-table">
+                        <thead>
+                            <tr>
+                                <th>Test</th>
+                                <th>Attempts</th>
+                                <th>Avg %</th>
+                                <th>Min %</th>
+                                <th>Max %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="5" class="loading-text">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error display -->
+        <div id="error" class="hidden"></div>
+    </div>
+
+    <!-- Chart.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
