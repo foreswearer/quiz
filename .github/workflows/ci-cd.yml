@@ -1,0 +1,112 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  quality:
+    name: Quality Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest httpx
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+      - name: Lint with Ruff
+        run: |
+          # Run ruff for linting
+          ruff check .
+          # Run ruff for formatting check
+          ruff format --check .
+
+      - name: Run Tests
+        run: |
+          if [ -d tests ]; then
+            PYTHONPATH=. pytest
+          else
+            echo "No tests directory found, skipping tests."
+          fi
+
+  deploy:
+    name: Deploy to VPS
+    needs: quality
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install SSH Key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_KEY }}
+          known_hosts: ${{ secrets.KNOWN_HOSTS }}
+          if_key_exists: replace
+
+      - name: Adding Known Hosts
+        run: ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy with rsync
+        run: |
+          rsync -avz --delete \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='.venv/' \
+            --exclude='__pycache__/' \
+            --exclude='*.pyc' \
+            -e "ssh -o StrictHostKeyChecking=no" \
+            . ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/ramiro_rego/quiz-backend
+
+      - name: Execute Remote Deploy Script
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /home/ramiro_rego/quiz-backend
+            ./deploy.sh
+
+      - name: Health Check
+        run: |
+          echo "Waiting for service to start..."
+          sleep 5
+          # Assuming the service runs on port 8000 and is accessible via the public IP/domain
+          # If not exposed, we might need to curl localhost via ssh, but let's try public first or skip if not applicable.
+          # Since we are in the runner, we can't easily curl localhost on the VM without an SSH tunnel or running curl on the VM.
+          # Let's run curl ON the VM.
+          
+      - name: Remote Health Check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            echo "Checking service health..."
+            # Retry a few times
+            for i in {1..5}; do
+              if curl -f http://localhost:8000/docs > /dev/null 2>&1; then
+                echo "Health check passed!"
+                exit 0
+              fi
+              echo "Waiting for service..."
+              sleep 2
+            done
+            echo "Health check failed!"
+            exit 1
