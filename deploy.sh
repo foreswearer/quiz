@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_DIR="/home/ramiro_rego/quiz-backend"
-VENV_DIR="$APP_DIR/.venv"
+VENV_DIR="$APP_DIR/venv"
 SERVICE_NAME="quiz-backend.service"  # cambia esto si tu servicio se llama distinto
 
 cd "$APP_DIR"
