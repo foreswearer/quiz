@@ -86,27 +86,35 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
+            echo "=== Post-deployment verification ==="
+            
             echo "Checking service status..."
             sudo systemctl status quiz-backend.service --no-pager || true
             
-            echo "Waiting for service to start..."
-            sleep 10
+            echo ""
+            echo "Checking if backend is listening on port 8000..."
+            ss -tlnp | grep 8000 || echo "⚠️  Port 8000 not listening"
             
-            echo "Checking if service is listening on port 8000..."
-            ss -tlnp | grep 8000 || echo "Port 8000 not listening yet"
-            
-            echo "Attempting health check on HTTPS (port 443)..."
-            # Retry health check
+            echo ""
+            echo "Attempting health check via NGINX (HTTPS on port 443)..."
             for i in {1..10}; do
               if curl -f -k https://localhost/docs > /dev/null 2>&1; then
-                echo "✅ Health check passed!"
+                echo "✅ Health check passed! Backend is accessible via NGINX."
                 exit 0
               fi
               echo "⏳ Attempt $i/10: Waiting for service..."
               sleep 3
             done
             
+            echo ""
             echo "❌ Health check failed after 10 attempts"
-            echo "Service logs:"
+            echo ""
+            echo "=== Diagnostic Information ==="
+            echo "Service logs (last 50 lines):"
             sudo journalctl -u quiz-backend.service -n 50 --no-pager
+            echo ""
+            echo "NGINX error log (last 20 lines):"
+            sudo tail -n 20 /var/log/nginx/error.log || echo "Cannot read NGINX error log"
+            
             exit 1
+
