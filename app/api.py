@@ -42,7 +42,7 @@ def available_tests():
             rows = cur.fetchall()
 
             tests: List[Dict[str, Any]] = []
-            for (tid, title, desc, total_points, num_questions) in rows:
+            for tid, title, desc, total_points, num_questions in rows:
                 tests.append(
                     {
                         "id": tid,
@@ -378,9 +378,7 @@ def submit_attempt(attempt_id: int, payload: SubmitRequest):
                     continue
 
                 num_options = len(opt_rows)
-                correct_option_ids = [
-                    oid for (oid, is_corr) in opt_rows if is_corr
-                ]
+                correct_option_ids = [oid for (oid, is_corr) in opt_rows if is_corr]
 
                 is_correct: Optional[bool] = None
                 if selected_option_id is not None:
@@ -1069,13 +1067,17 @@ def test_analytics(test_id: int):
                 # Most failed = incorrect option with highest wrong_selected
                 incorrect_rows = [r for r in arows if not r[4]]  # is_correct index 4
                 if incorrect_rows:
-                    r = max(incorrect_rows, key=lambda r: r[6])  # wrong_selected index 6
+                    r = max(
+                        incorrect_rows, key=lambda r: r[6]
+                    )  # wrong_selected index 6
                     most_failed_answer = to_opt_dict(r)
 
                 # Most correct = correct option with highest correct_selected
                 correct_rows = [r for r in arows if r[4]]  # is_correct index 4
                 if correct_rows:
-                    r = max(correct_rows, key=lambda r: r[5])  # correct_selected index 5
+                    r = max(
+                        correct_rows, key=lambda r: r[5]
+                    )  # correct_selected index 5
                     most_correct_answer = to_opt_dict(r)
 
             # Podium: best single score (percentage)
@@ -1166,7 +1168,7 @@ def test_analytics(test_id: int):
 
 @router.get("/teacher/dashboard_overview")
 def teacher_dashboard_overview(
-    teacher_dni: str = Query(..., description="Teacher DNI (must have role='teacher')")
+    teacher_dni: str = Query(..., description="Teacher DNI (must have role='teacher')"),
 ):
     """
     High-level teacher dashboard overview. /tests/
