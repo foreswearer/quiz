@@ -476,6 +476,112 @@
             if (data.error) {
                 randomInfo.textContent = data.error;
                 return;
+            }
+
+            // Redirect to quiz page with test_id
+            const testId = data.test.id;
+            window.location.href = `/quiz?test_id=${testId}`;
+        } catch (e) {
+            dbg("createRandomTest exception", e);
+            randomInfo.textContent = "Error creating test: " + e;
+        }
+    });
+
+    // View podium
+    viewPodiumBtn.addEventListener("click", async function () {
+        podiumInfo.textContent = "";
+        const testId = testSelect.value;
+        dbg("View podium clicked, testId=", testId);
+        if (!testId) {
+            showError("Select a test first.");
+            return;
+        }
+        try {
+            const data = await fetchAnalytics(testId);
+            if (data.error) {
+                podiumInfo.textContent = data.error;
+                return;
+            }
+            if (!data.analytics) {
+                podiumInfo.textContent = "No analytics available yet.";
+                return;
+            }
+            const html = [
+                `<strong>Test:</strong> #${data.test.id} – ${data.test.title}`,
+                "<br>",
+                formatPodiumHtml(data.analytics),
+            ].join("<br>");
+            podiumInfo.innerHTML = html;
+        } catch (e) {
+            dbg("viewPodium exception", e);
+            podiumInfo.textContent = "Error loading podium: " + e;
+        }
+    });
+
+    // Teacher: delete test
+    deleteTestBtn.addEventListener("click", async function () {
+        deleteTestInfo.textContent = "";
+        dbg("Delete test button clicked, role=", currentRole);
+        if (currentRole !== "teacher") {
+            deleteTestInfo.textContent =
+                "Only teachers can delete tests (role=teacher).";
+            return;
+        }
+        const testId = testSelect.value;
+        if (!testId) {
+            deleteTestInfo.textContent = "Select a test first.";
+            return;
+        }
+        if (
+            !confirm(
+                `Are you sure you want to delete test #${testId} ` +
+                "and ALL associated results? This cannot be undone."
+            )
+        ) {
+            dbg("Delete test canceled by user");
+            return;
+        }
+        try {
+            const resp = await fetch(
+                `/tests/${encodeURIComponent(testId)}?teacher_dni=${encodeURIComponent(currentDni)}`,
+                { method: "DELETE" }
+            );
+            dbg("delete_test response status", resp.status);
+            if (!resp.ok) {
+                const txt = await resp.text();
+                dbg("delete_test error body", txt);
+                deleteTestInfo.textContent = "Error deleting test: " + txt;
+                return;
+            }
+            const data = await resp.json();
+            dbg("delete_test response json", data);
+            if (data.error) {
+                deleteTestInfo.textContent = data.error;
+                return;
+            }
+            deleteTestInfo.textContent = data.message || "Test deleted successfully.";
+
+            // Refresh tests list
+            const testsData = await fetchAvailableTests();
+            populateTestsSelect(testsData.tests || []);
+        } catch (e) {
+            dbg("delete_test exception", e);
+            deleteTestInfo.textContent = "Error deleting test: " + e;
+        }
+    });
+
+    // Teacher: load analytics
+    loadAnalyticsBtn.addEventListener("click", async function () {
+        analyticsOutput.textContent = "";
+        const testId = testSelect.value;
+        dbg("Load analytics clicked, testId=", testId);
+        if (!testId) {
+            analyticsOutput.textContent = "Select a test first.";
+            return;
+        }
+        try {
+            const data = await fetchAnalytics(testId);
+            if (data.error) {
                 analyticsOutput.textContent = data.error;
                 return;
             }
@@ -487,7 +593,7 @@
 
             const lines = [];
             lines.push(
-                `< strong > Test:</strong > #${data.test.id} – ${data.test.title} `
+                `<strong>Test:</strong> #${data.test.id} – ${data.test.title}`
             );
             lines.push("<br>");
 
@@ -498,7 +604,7 @@
                 const cr =
                     q.correct_rate != null ? (q.correct_rate * 100).toFixed(1) : "-";
                 lines.push(
-                    `< strong > Most failed question:</strong > [Q${q.question_id}]` +
+                    `<strong>Most failed question:</strong> [Q${q.question_id}] ` +
                     `${q.text} (wrong: ${q.wrong_count} / ${q.total_answers}, ${wr}%)`
                 );
             } else {
@@ -511,7 +617,7 @@
                 const cr =
                     q.correct_rate != null ? (q.correct_rate * 100).toFixed(1) : "-";
                 lines.push(
-                    `< strong > Most correct question:</strong > [Q${q.question_id}]` +
+                    `<strong>Most correct question:</strong> [Q${q.question_id}] ` +
                     `${q.text} (correct: ${q.correct_count} / ${q.total_answers}, ${cr}%)`
                 );
             } else {
@@ -526,8 +632,8 @@
                 const wr =
                     o.wrong_rate != null ? (o.wrong_rate * 100).toFixed(1) : "-";
                 lines.push(
-                    `< strong > Most failed answer:</strong > ` +
-                    `"${o.option_text}"(Q${o.question_id}) ` +
+                    `<strong>Most failed answer:</strong> ` +
+                    `"${o.option_text}" (Q${o.question_id}) ` +
                     `– wrong: ${o.wrong_selected} / ${o.times_selected}, ${wr}%`
                 );
             } else {
