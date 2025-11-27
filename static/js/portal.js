@@ -491,51 +491,10 @@
     viewPodiumBtn.addEventListener("click", async function () {
         podiumInfo.textContent = "";
         const testId = testSelect.value;
-        dbg("View podium clicked, testId=", testId);
-        if (!testId) {
-            showError("Select a test first.");
-            return;
-        }
-        try {
-            const data = await fetchAnalytics(testId);
-            if (data.error) {
-                podiumInfo.textContent = data.error;
-                return;
-            }
-            if (!data.analytics) {
-                podiumInfo.textContent = "No analytics available yet.";
-                return;
-            }
-            const html = [
-                `<strong>Test:</strong> #${data.test.id} – ${data.test.title}`,
-                "<br>",
-                formatPodiumHtml(data.analytics),
-            ].join("<br>");
-            podiumInfo.innerHTML = html;
-        } catch (e) {
-            dbg("viewPodium exception", e);
-            podiumInfo.textContent = "Error loading podium: " + e;
-        }
-    });
-
-    // Teacher: delete test
-    deleteTestBtn.addEventListener("click", async function () {
-        deleteTestInfo.textContent = "";
-        dbg("Delete test button clicked, role=", currentRole);
-        if (currentRole !== "teacher") {
-            deleteTestInfo.textContent =
-                "Only teachers can delete tests (role=teacher).";
-            return;
-        }
-        const testId = testSelect.value;
-        if (!testId) {
-            deleteTestInfo.textContent = "Select a test first.";
-            return;
-        }
         if (
             !confirm(
                 `Are you sure you want to delete test #${testId} ` +
-                    "and ALL associated results? This cannot be undone."
+                "and ALL associated results? This cannot be undone."
             )
         ) {
             dbg("Delete test canceled by user");
@@ -543,9 +502,10 @@
         }
         try {
             const resp = await fetch(
-                `/teacher/delete_test/${encodeURIComponent(
+                `/ tests / ${encodeURIComponent(
                     testId
-                )}?teacher_dni=${encodeURIComponent(currentDni)}`,
+                )
+                }?teacher_dni = ${encodeURIComponent(currentDni)} `,
                 { method: "DELETE" }
             );
             dbg("delete_test response status", resp.status);
@@ -595,7 +555,7 @@
 
             const lines = [];
             lines.push(
-                `<strong>Test:</strong> #${data.test.id} – ${data.test.title}`
+                `< strong > Test:</strong > #${data.test.id} – ${data.test.title} `
             );
             lines.push("<br>");
 
@@ -606,8 +566,8 @@
                 const cr =
                     q.correct_rate != null ? (q.correct_rate * 100).toFixed(1) : "-";
                 lines.push(
-                    `<strong>Most failed question:</strong> [Q${q.question_id}] ` +
-                        `${q.text} (wrong: ${q.wrong_count} / ${q.total_answers}, ${wr}%)`
+                    `< strong > Most failed question:</strong > [Q${q.question_id}]` +
+                    `${q.text} (wrong: ${q.wrong_count} / ${q.total_answers}, ${wr}%)`
                 );
             } else {
                 lines.push("<strong>Most failed question:</strong> no data yet.");
@@ -619,8 +579,8 @@
                 const cr =
                     q.correct_rate != null ? (q.correct_rate * 100).toFixed(1) : "-";
                 lines.push(
-                    `<strong>Most correct question:</strong> [Q${q.question_id}] ` +
-                        `${q.text} (correct: ${q.correct_count} / ${q.total_answers}, ${cr}%)`
+                    `< strong > Most correct question:</strong > [Q${q.question_id}]` +
+                    `${q.text} (correct: ${q.correct_count} / ${q.total_answers}, ${cr}%)`
                 );
             } else {
                 lines.push("<strong>Most correct question:</strong> no data yet.");
@@ -634,9 +594,9 @@
                 const wr =
                     o.wrong_rate != null ? (o.wrong_rate * 100).toFixed(1) : "-";
                 lines.push(
-                    `<strong>Most failed answer:</strong> ` +
-                        `"${o.option_text}" (Q${o.question_id}) ` +
-                        `– wrong: ${o.wrong_selected} / ${o.times_selected}, ${wr}%`
+                    `< strong > Most failed answer:</strong > ` +
+                    `"${o.option_text}"(Q${o.question_id}) ` +
+                    `– wrong: ${o.wrong_selected} / ${o.times_selected}, ${wr}%`
                 );
             } else {
                 lines.push("<strong>Most failed answer:</strong> no data yet.");
@@ -648,8 +608,8 @@
                     o.correct_rate != null ? (o.correct_rate * 100).toFixed(1) : "-";
                 lines.push(
                     `<strong>Most correct answer:</strong> ` +
-                        `"${o.option_text}" (Q${o.question_id}) ` +
-                        `– correct: ${o.correct_selected} / ${o.times_selected}, ${cr}%`
+                    `"${o.option_text}" (Q${o.question_id}) ` +
+                    `– correct: ${o.correct_selected} / ${o.times_selected}, ${cr}%`
                 );
             } else {
                 lines.push("<strong>Most correct answer:</strong> no data yet.");
@@ -668,9 +628,9 @@
 
             lines.push(
                 `<strong>Attempts:</strong> total ${s.total_attempts || 0}, ` +
-                    `students ${s.num_students || 0}, ` +
-                    `avg attempts / student ${avgAttempts}, ` +
-                    `avg percentage ${avgPct}.`
+                `students ${s.num_students || 0}, ` +
+                `avg attempts / student ${avgAttempts}, ` +
+                `avg percentage ${avgPct}.`
             );
 
             lines.push("<br>");
