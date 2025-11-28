@@ -59,6 +59,27 @@ echo "Granting permissions to quiz_user..."
 sudo -u postgres psql -d "$DB_NAME" -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO quiz_user;"
 sudo -u postgres psql -d "$DB_NAME" -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO quiz_user;"
 
+# 0.3 Copy data from production to staging
+echo "Copying data from production database..."
+PROD_DB="quiz_platform"
+
+# Check if production DB exists
+if sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$PROD_DB'" | grep -q 1; then
+    echo "Production database found. Copying data tables..."
+    
+    # Dump only data (not schema) from production, excluding schema definition
+    # We use --data-only to skip CREATE TABLE statements, and --disable-triggers to avoid FK issues
+    sudo -u postgres pg_dump "$PROD_DB" \
+        --data-only \
+        --disable-triggers \
+        --exclude-table-data='spatial_ref_sys' \
+        | sudo -u postgres psql -d "$DB_NAME" -q
+    
+    echo "✅ Data copied from production to staging."
+else
+    echo "⚠️  Production database not found. Staging will use seed data only."
+fi
+
 # Ensure app directory exists
 if [ ! -d "$APP_DIR" ]; then
     echo "Creating app directory at $APP_DIR..."
