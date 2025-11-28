@@ -29,6 +29,26 @@ else
     else
         echo "⚠️  Warning: Failed to create database automatically."
         echo "   You may need to run: sudo -u postgres createdb -O quiz_user $DB_NAME"
+        exit 1
+    fi
+fi
+
+# 0.1 Ensure Schema Exists
+echo "Checking database schema..."
+SCHEMA_EXISTS=$(sudo -u postgres psql -d "$DB_NAME" -tAc "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'app_user');")
+
+if [ "$SCHEMA_EXISTS" = "t" ]; then
+    echo "✅ Schema appears to be initialized (app_user table found)."
+else
+    echo "Schema not found. Initializing..."
+    # We need to make sure we are using the schema.sql from the new deployment
+    # But at this point we haven't rsync'd yet? NO, this script runs on the server AFTER rsync.
+    # So APP_DIR contains the new code.
+    if sudo -u postgres psql -d "$DB_NAME" -f "$APP_DIR/schema.sql"; then
+        echo "✅ Schema initialized."
+    else
+        echo "❌ Failed to initialize schema."
+        exit 1
     fi
 fi
 
