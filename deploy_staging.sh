@@ -54,6 +54,11 @@ else
     fi
 fi
 
+# 0.2 Ensure Permissions
+echo "Granting permissions to quiz_user..."
+sudo -u postgres psql -d "$DB_NAME" -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO quiz_user;"
+sudo -u postgres psql -d "$DB_NAME" -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO quiz_user;"
+
 # Ensure app directory exists
 if [ ! -d "$APP_DIR" ]; then
     echo "Creating app directory at $APP_DIR..."
