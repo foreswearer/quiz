@@ -139,6 +139,7 @@
 
     const teacherPanel = document.getElementById("teacher-panel");
     const deleteTestBtn = document.getElementById("delete-test-btn");
+    const renameTestBtn = document.getElementById("rename-test-btn");
     const deleteTestInfo = document.getElementById("delete-test-info");
     const loadAnalyticsBtn = document.getElementById("load-analytics-btn");
     const analyticsOutput = document.getElementById("analytics-output");
@@ -362,7 +363,12 @@
 
             // Fetch tests
             const testsData = await fetchAvailableTests();
-            populateTestsSelect(testsData.tests || []);
+            let tests = testsData.tests || [];
+
+            // Filter: only show tests with attempts > 0 (as requested)
+            tests = tests.filter(t => t.attempts_count > 0);
+
+            populateTestsSelect(tests);
 
             // Fetch attempts
             const attemptsData = await fetchStudentAttempts(dni);
@@ -479,7 +485,7 @@
             }
 
             // Redirect to quiz page with test_id
-            const testId = data.test.id;
+            const testId = data.test_id;
             window.location.href = `/quiz?test_id=${testId}`;
         } catch (e) {
             dbg("createRandomTest exception", e);
@@ -562,11 +568,59 @@
             deleteTestInfo.textContent = data.message || "Test deleted successfully.";
 
             // Refresh tests list
-            const testsData = await fetchAvailableTests();
-            populateTestsSelect(testsData.tests || []);
+            loadDashboardBtn.click();
         } catch (e) {
             dbg("delete_test exception", e);
             deleteTestInfo.textContent = "Error deleting test: " + e;
+        }
+    });
+
+    // Teacher: rename test
+    renameTestBtn.addEventListener("click", async function () {
+        deleteTestInfo.textContent = "";
+        dbg("Rename test button clicked, role=", currentRole);
+        if (currentRole !== "teacher") {
+            deleteTestInfo.textContent = "Only teachers can rename tests.";
+            return;
+        }
+        const testId = testSelect.value;
+        if (!testId) {
+            deleteTestInfo.textContent = "Select a test first.";
+            return;
+        }
+
+        const newTitle = prompt("Enter new title for this test:");
+        if (!newTitle || !newTitle.trim()) {
+            return; // Cancelled or empty
+        }
+
+        try {
+            const resp = await fetch(`/tests/${encodeURIComponent(testId)}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    title: newTitle.trim(),
+                    teacher_dni: currentDni
+                }),
+            });
+            dbg("rename_test response status", resp.status);
+            if (!resp.ok) {
+                const txt = await resp.text();
+                deleteTestInfo.textContent = "Error renaming test: " + txt;
+                return;
+            }
+            const data = await resp.json();
+            if (data.error) {
+                deleteTestInfo.textContent = data.error;
+                return;
+            }
+            deleteTestInfo.textContent = data.message || "Test renamed successfully.";
+
+            // Refresh tests list
+            loadDashboardBtn.click();
+        } catch (e) {
+            dbg("rename_test exception", e);
+            deleteTestInfo.textContent = "Error renaming test: " + e;
         }
     });
 
