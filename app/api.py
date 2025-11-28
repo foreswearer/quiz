@@ -60,7 +60,7 @@ def available_tests():
         print(f"Error in available_tests: {e}")
         return {"error": str(e), "tests": []}
     finally:
-        if 'conn' in locals() and conn:
+        if "conn" in locals() and conn:
             conn.close()
 
 
