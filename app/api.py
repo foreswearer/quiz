@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Query
 
 from .db import get_connection, check_db
-from .schemas import SubmitRequest, RandomTestRequest
+from .schemas import SubmitRequest, RandomTestRequest, UpdateTestRequest
 
 router = APIRouter()
 
@@ -32,9 +32,11 @@ def available_tests():
                     t.title,
                     t.description,
                     COALESCE(t.total_points, 0)::float AS total_points,
-                    COUNT(tq.question_id) AS num_questions
+                    COUNT(DISTINCT tq.question_id) AS num_questions,
+                    COUNT(DISTINCT ta.id) AS attempts_count
                 FROM test t
                 LEFT JOIN test_question tq ON tq.test_id = t.id
+                LEFT JOIN test_attempt ta ON ta.test_id = t.id
                 GROUP BY t.id, t.title, t.description, t.total_points
                 ORDER BY t.id
                 """
@@ -42,7 +44,7 @@ def available_tests():
             rows = cur.fetchall()
 
             tests: List[Dict[str, Any]] = []
-            for tid, title, desc, total_points, num_questions in rows:
+            for tid, title, desc, total_points, num_questions, attempts_count in rows:
                 tests.append(
                     {
                         "id": tid,
@@ -50,6 +52,7 @@ def available_tests():
                         "description": desc,
                         "total_points": total_points,
                         "num_questions": int(num_questions),
+                        "attempts_count": int(attempts_count),
                     }
                 )
             return {"tests": tests}
@@ -760,6 +763,60 @@ def create_random_test(req: RandomTestRequest):
 # -------------------------------------------------------------------------
 # Teacher / analytics endpoints
 # -------------------------------------------------------------------------
+
+
+@router.put("/tests/{test_id}")
+def update_test(test_id: int, payload: UpdateTestRequest):
+    """
+    Rename a test.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # Check teacher
+            cur.execute(
+                """
+                SELECT id, full_name, role
+                FROM app_user
+                WHERE dni = %s
+                """,
+                (payload.teacher_dni,),
+            )
+            urow = cur.fetchone()
+            if urow is None:
+                return {"error": f"user with DNI {payload.teacher_dni} not found"}
+            _, _, role = urow
+            if role != "teacher":
+                return {"error": f"DNI {payload.teacher_dni} is not a teacher"}
+
+            # Check test exists
+            cur.execute(
+                "SELECT id, title FROM test WHERE id = %s",
+                (test_id,),
+            )
+            trow = cur.fetchone()
+            if trow is None:
+                return {"error": f"test {test_id} not found"}
+            _, test_title = trow
+
+            # Update title
+            cur.execute(
+                """
+                UPDATE test
+                SET title = %s
+                WHERE id = %s
+                """,
+                (payload.title, test_id),
+            )
+            conn.commit()
+
+            return {
+                "id": test_id,
+                "title": payload.title,
+                "message": "Test renamed successfully",
+            }
+    finally:
+        conn.close()
 
 
 @router.delete("/tests/{test_id}")
