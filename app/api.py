@@ -56,8 +56,12 @@ def available_tests():
                     }
                 )
             return {"tests": tests}
+    except Exception as e:
+        print(f"Error in available_tests: {e}")
+        return {"error": str(e), "tests": []}
     finally:
-        conn.close()
+        if 'conn' in locals() and conn:
+            conn.close()
 
 
 @router.get("/tests/{test_id}")
