@@ -7,8 +7,6 @@ class Answer(BaseModel):
     selected_option_id: int
 
 
-
-
 class SubmitRequest(BaseModel):
     answers: List[Answer]
 
