@@ -42,12 +42,14 @@ if [ "$SCHEMA_EXISTS" = "t" ]; then
 else
     echo "Schema not found. Initializing..."
     # We need to make sure we are using the schema.sql from the new deployment
-    # But at this point we haven't rsync'd yet? NO, this script runs on the server AFTER rsync.
-    # So APP_DIR contains the new code.
-    if sudo -u postgres psql -d "$DB_NAME" -f "$APP_DIR/schema.sql"; then
+    # Use input redirection to avoid permission issues with postgres user reading files in user home
+    if sudo -u postgres psql -d "$DB_NAME" < "$APP_DIR/schema.sql"; then
         echo "✅ Schema initialized."
     else
         echo "❌ Failed to initialize schema."
+        # Try to print error
+        echo "Attempting to debug schema file access:"
+        ls -l "$APP_DIR/schema.sql"
         exit 1
     fi
 fi
