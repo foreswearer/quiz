@@ -7,13 +7,6 @@ class Answer(BaseModel):
     selected_option_id: int
 
 
-from typing import List
-from pydantic import BaseModel
-
-
-class Answer(BaseModel):
-    question_id: int
-    selected_option_id: int
 
 
 class SubmitRequest(BaseModel):
