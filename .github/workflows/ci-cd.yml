@@ -54,7 +54,7 @@ jobs:
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
       - name: Deploy to Staging with rsync
         run: |
-          rsync -avz --delete-excluded \
+          rsync -avz --delete \
             --exclude='.git/' \
             --exclude='.github/' \
             --exclude='venv/' \
@@ -124,7 +124,7 @@ jobs:
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
       - name: Deploy to Production with rsync
         run: |
-          rsync -avz --delete-excluded \
+          rsync -avz --delete \
             --exclude='.git/' \
             --exclude='.github/' \
             --exclude='venv/' \
