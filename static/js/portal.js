@@ -377,8 +377,14 @@
             }
 
             const attempts = attemptsData.attempts || [];
-            renderAttemptsTable(attempts);
-            renderAttemptsChart(attempts);
+
+            // Filter out incomplete attempts and zero-score attempts
+            const filteredAttempts = attempts.filter(a =>
+                a.status === 'completed' && a.score > 0
+            );
+
+            renderAttemptsTable(filteredAttempts);
+            renderAttemptsChart(filteredAttempts);
 
             // Check role from first attempt (if any)
             currentRole = null;
