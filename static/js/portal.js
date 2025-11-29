@@ -147,6 +147,9 @@
     let currentDni = null;
     let currentRole = null;
     let attemptsChart = null;
+    let currentPage = 1;
+    const attemptsPerPage = 5;
+    let allAttempts = [];
 
     function showError(msg) {
         errorDiv.textContent = msg;
@@ -223,18 +226,32 @@
         });
     }
 
-    function renderAttemptsTable(attempts) {
+function renderAttemptsTable(attempts) {
         dbg("renderAttemptsTable() with", attempts.length, "attempts");
+        allAttempts = attempts;
+        currentPage = 1;
+        renderAttemptsPage();
+    }
+
+    function renderAttemptsPage() {
         attemptsTableBody.innerHTML = "";
-        if (attempts.length === 0) {
+
+        if (allAttempts.length === 0) {
             attemptsEmpty.classList.remove("hidden");
             attemptsTableWrapper.classList.add("hidden");
+            hidePagination();
             return;
         }
+
         attemptsEmpty.classList.add("hidden");
         attemptsTableWrapper.classList.remove("hidden");
 
-        attempts.forEach((a) => {
+        const totalPages = Math.ceil(allAttempts.length / attemptsPerPage);
+        const startIndex = (currentPage - 1) * attemptsPerPage;
+        const endIndex = startIndex + attemptsPerPage;
+        const pageAttempts = allAttempts.slice(startIndex, endIndex);
+
+        pageAttempts.forEach((a) => {
             const row = document.createElement("tr");
             const score = a.score != null ? a.score.toFixed(2) : "-";
             const maxScore = a.max_score != null ? a.max_score.toFixed(2) : "-";
@@ -244,14 +261,61 @@
                 : "-";
 
             row.innerHTML = `
+                <td>${submittedStr}</td>
                 <td>${a.test_title || "N/A"}</td>
                 <td>${a.attempt_number}</td>
                 <td>${score} / ${maxScore}</td>
                 <td>${percentage}%</td>
-                <td>${submittedStr}</td>
+                <td>${a.status || "-"}</td>
             `;
             attemptsTableBody.appendChild(row);
         });
+
+        renderPagination(totalPages);
+    }
+
+    function renderPagination(totalPages) {
+        let paginationDiv = document.getElementById("attempts-pagination");
+
+        if (!paginationDiv) {
+            paginationDiv = document.createElement("div");
+            paginationDiv.id = "attempts-pagination";
+            paginationDiv.style.cssText = "margin-top: 0.5rem; display: flex; gap: 0.5rem; align-items: center; justify-content: center;";
+            attemptsTableWrapper.after(paginationDiv);
+        }
+
+        if (totalPages <= 1) {
+            paginationDiv.classList.add("hidden");
+            return;
+        }
+
+        paginationDiv.classList.remove("hidden");
+        paginationDiv.innerHTML = `
+            <button id="prev-page" type="button" ${currentPage === 1 ? "disabled" : ""}>← Prev</button>
+            <span>Page ${currentPage} of ${totalPages}</span>
+            <button id="next-page" type="button" ${currentPage === totalPages ? "disabled" : ""}>Next →</button>
+        `;
+
+        document.getElementById("prev-page").addEventListener("click", () => {
+            if (currentPage > 1) {
+                currentPage--;
+                renderAttemptsPage();
+            }
+        });
+
+        document.getElementById("next-page").addEventListener("click", () => {
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderAttemptsPage();
+            }
+        });
+    }
+
+    function hidePagination() {
+        const paginationDiv = document.getElementById("attempts-pagination");
+        if (paginationDiv) {
+            paginationDiv.classList.add("hidden");
+        }
     }
 
     function renderAttemptsChart(attempts) {
