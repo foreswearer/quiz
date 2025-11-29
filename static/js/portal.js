@@ -380,7 +380,7 @@
 
             // Filter out incomplete attempts and zero-score attempts
             const filteredAttempts = attempts.filter(a =>
-                a.status === 'completed' && a.score > 0
+                a.status === 'graded' && a.score > 0
             );
 
             renderAttemptsTable(filteredAttempts);
