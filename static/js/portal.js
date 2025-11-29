@@ -356,373 +356,390 @@
             return;
         }
 
-        return;
-    }
+        try {
+            // Store DNI in cookie
+            setCookie("quiz_dni", dni, 7);
+            currentDni = dni;
+
+            // Fetch tests
+            const testsData = await fetchAvailableTests();
+            let tests = testsData.tests || [];
+
+
+
+            populateTestsSelect(tests);
+
+            // Fetch attempts
+            const attemptsData = await fetchStudentAttempts(dni);
+            if (attemptsData.error) {
+                showError(attemptsData.error);
+                return;
+            }
 
             const attempts = attemptsData.attempts || [];
-    renderAttemptsTable(attempts);
-    renderAttemptsChart(attempts);
+            renderAttemptsTable(attempts);
+            renderAttemptsChart(attempts);
 
-    // Check role from first attempt (if any)
-    currentRole = null;
-    if (attempts.length > 0) {
-        // We don't have role in attempts, need to get from user
-        // For now, check if DNI matches teacher pattern
-        // Better: fetch user info from a /user/{dni} endpoint
-    }
-
-    // Show dashboard
-    dashboard.classList.remove("hidden");
-
-    // Infer role: if DNI matches known teacher pattern, show teacher panel
-    // For demo: check if this is a teacher by attempting to fetch teacher dashboard
-    try {
-        const teacherCheck = await fetch(
-            `/teacher/dashboard_overview?teacher_dni=${encodeURIComponent(dni)}`
-        );
-        if (teacherCheck.ok) {
-            const teacherData = await teacherCheck.json();
-            if (!teacherData.error) {
-                currentRole = "teacher";
-                teacherPanel.classList.remove("hidden");
-                // Show dashboard button
-                if (dashboardBtn) {
-                    dashboardBtn.classList.remove("hidden");
-                }
-                studentInfo.textContent = `Welcome, ${teacherData.summary.teacher.name} (Teacher)`;
+            // Check role from first attempt (if any)
+            currentRole = null;
+            if (attempts.length > 0) {
+                // We don't have role in attempts, need to get from user
+                // For now, check if DNI matches teacher pattern
+                // Better: fetch user info from a /user/{dni} endpoint
             }
-        }
-    } catch (e) {
-        dbg("Teacher check failed", e);
-    }
 
-    if (currentRole !== "teacher") {
-        currentRole = "student";
-        teacherPanel.classList.add("hidden");
-        if (dashboardBtn) {
-            dashboardBtn.classList.add("hidden");
+            // Show dashboard
+            dashboard.classList.remove("hidden");
+
+            // Infer role: if DNI matches known teacher pattern, show teacher panel
+            // For demo: check if this is a teacher by attempting to fetch teacher dashboard
+            try {
+                const teacherCheck = await fetch(
+                    `/teacher/dashboard_overview?teacher_dni=${encodeURIComponent(dni)}`
+                );
+                if (teacherCheck.ok) {
+                    const teacherData = await teacherCheck.json();
+                    if (!teacherData.error) {
+                        currentRole = "teacher";
+                        teacherPanel.classList.remove("hidden");
+                        // Show dashboard button
+                        if (dashboardBtn) {
+                            dashboardBtn.classList.remove("hidden");
+                        }
+                        studentInfo.textContent = `Welcome, ${teacherData.summary.teacher.name} (Teacher)`;
+                    }
+                }
+            } catch (e) {
+                dbg("Teacher check failed", e);
+            }
+
+            if (currentRole !== "teacher") {
+                currentRole = "student";
+                teacherPanel.classList.add("hidden");
+                if (dashboardBtn) {
+                    dashboardBtn.classList.add("hidden");
+                }
+                studentInfo.textContent = `Welcome, ${dni} (Student)`;
+            }
+        } catch (e) {
+            dbg("loadDashboard exception", e);
+            showError("Error loading dashboard: " + e.message);
         }
-        studentInfo.textContent = `Welcome, ${dni} (Student)`;
-    }
-} catch (e) {
-    dbg("loadDashboard exception", e);
-    showError("Error loading dashboard: " + e.message);
-}
     });
 
-// ---------- Start selected test ----------
-startSelectedBtn.addEventListener("click", async function () {
-    errorDiv.textContent = "";
-    const testId = testSelect.value;
-    dbg("Start selected test clicked, testId=", testId);
-    if (!testId) {
-        showError("Select a test first.");
-        return;
-    }
-    if (!currentDni) {
-        showError("Load your dashboard first.");
-        return;
-    }
-
-    // Redirect to quiz page with test_id
-    // Quiz page will handle starting the test
-    window.location.href = `/quiz?test_id=${testId}`;
-});
-
-// ---------- Create random test ----------
-createRandomBtn.addEventListener("click", async function () {
-    randomInfo.textContent = "";
-    const numQuestions = parseInt(numQuestionsInput.value, 10);
-    dbg("Create random test clicked, numQuestions=", numQuestions);
-    if (isNaN(numQuestions) || numQuestions < 1) {
-        randomInfo.textContent = "Enter a valid number of questions (>=1).";
-        return;
-    }
-    if (!currentDni) {
-        randomInfo.textContent = "Load your dashboard first.";
-        return;
-    }
-
-    try {
-        const resp = await fetch("/tests/random_from_bank", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                student_dni: currentDni,
-                num_questions: numQuestions,
-            }),
-        });
-        dbg("create random test response status", resp.status);
-        if (!resp.ok) {
-            const txt = await resp.text();
-            dbg("create random test error body", txt);
-            randomInfo.textContent = "Error creating test: " + txt;
+    // ---------- Start selected test ----------
+    startSelectedBtn.addEventListener("click", async function () {
+        errorDiv.textContent = "";
+        const testId = testSelect.value;
+        dbg("Start selected test clicked, testId=", testId);
+        if (!testId) {
+            showError("Select a test first.");
             return;
         }
-        const data = await resp.json();
-        dbg("create random test response json", data);
-        if (data.error) {
-            randomInfo.textContent = data.error;
+        if (!currentDni) {
+            showError("Load your dashboard first.");
             return;
         }
 
         // Redirect to quiz page with test_id
-        const testId = data.test_id;
+        // Quiz page will handle starting the test
         window.location.href = `/quiz?test_id=${testId}`;
-    } catch (e) {
-        dbg("createRandomTest exception", e);
-        randomInfo.textContent = "Error creating test: " + e;
-    }
-});
+    });
 
-// View podium
-viewPodiumBtn.addEventListener("click", async function () {
-    podiumInfo.textContent = "";
-    const testId = testSelect.value;
-    dbg("View podium clicked, testId=", testId);
-    if (!testId) {
-        showError("Select a test first.");
-        return;
-    }
-    try {
-        const data = await fetchAnalytics(testId);
-        if (data.error) {
-            podiumInfo.textContent = data.error;
+    // ---------- Create random test ----------
+    createRandomBtn.addEventListener("click", async function () {
+        randomInfo.textContent = "";
+        const numQuestions = parseInt(numQuestionsInput.value, 10);
+        dbg("Create random test clicked, numQuestions=", numQuestions);
+        if (isNaN(numQuestions) || numQuestions < 1) {
+            randomInfo.textContent = "Enter a valid number of questions (>=1).";
             return;
         }
-        if (!data.analytics) {
-            podiumInfo.textContent = "No analytics available yet.";
-            return;
-        }
-        const html = [
-            `<strong>Test:</strong> #${data.test.id} – ${data.test.title}`,
-            "<br>",
-            formatPodiumHtml(data.analytics),
-        ].join("<br>");
-        podiumInfo.innerHTML = html;
-    } catch (e) {
-        dbg("viewPodium exception", e);
-        podiumInfo.textContent = "Error loading podium: " + e;
-    }
-});
-
-// Teacher: delete test
-deleteTestBtn.addEventListener("click", async function () {
-    deleteTestInfo.textContent = "";
-    dbg("Delete test button clicked, role=", currentRole);
-    if (currentRole !== "teacher") {
-        deleteTestInfo.textContent =
-            "Only teachers can delete tests (role=teacher).";
-        return;
-    }
-    const testId = testSelect.value;
-    if (!testId) {
-        deleteTestInfo.textContent = "Select a test first.";
-        return;
-    }
-    if (
-        !confirm(
-            `Are you sure you want to delete test #${testId} ` +
-            "and ALL associated results? This cannot be undone."
-        )
-    ) {
-        dbg("Delete test canceled by user");
-        return;
-    }
-    try {
-        const resp = await fetch(
-            `/tests/${encodeURIComponent(testId)}?teacher_dni=${encodeURIComponent(currentDni)}`,
-            { method: "DELETE" }
-        );
-        dbg("delete_test response status", resp.status);
-        if (!resp.ok) {
-            const txt = await resp.text();
-            dbg("delete_test error body", txt);
-            deleteTestInfo.textContent = "Error deleting test: " + txt;
-            return;
-        }
-        const data = await resp.json();
-        dbg("delete_test response json", data);
-        if (data.error) {
-            deleteTestInfo.textContent = data.error;
-            return;
-        }
-        deleteTestInfo.textContent = data.message || "Test deleted successfully.";
-
-        // Refresh tests list
-        loadDashboardBtn.click();
-    } catch (e) {
-        dbg("delete_test exception", e);
-        deleteTestInfo.textContent = "Error deleting test: " + e;
-    }
-});
-
-// Teacher: rename test
-renameTestBtn.addEventListener("click", async function () {
-    deleteTestInfo.textContent = "";
-    dbg("Rename test button clicked, role=", currentRole);
-    if (currentRole !== "teacher") {
-        deleteTestInfo.textContent = "Only teachers can rename tests.";
-        return;
-    }
-    const testId = testSelect.value;
-    if (!testId) {
-        deleteTestInfo.textContent = "Select a test first.";
-        return;
-    }
-
-    const newTitle = prompt("Enter new title for this test:");
-    if (!newTitle || !newTitle.trim()) {
-        return; // Cancelled or empty
-    }
-
-    try {
-        const resp = await fetch(`/tests/${encodeURIComponent(testId)}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                title: newTitle.trim(),
-                teacher_dni: currentDni
-            }),
-        });
-        dbg("rename_test response status", resp.status);
-        if (!resp.ok) {
-            const txt = await resp.text();
-            deleteTestInfo.textContent = "Error renaming test: " + txt;
-            return;
-        }
-        const data = await resp.json();
-        if (data.error) {
-            deleteTestInfo.textContent = data.error;
-            return;
-        }
-        deleteTestInfo.textContent = data.message || "Test renamed successfully.";
-
-        // Refresh tests list
-        loadDashboardBtn.click();
-    } catch (e) {
-        dbg("rename_test exception", e);
-        deleteTestInfo.textContent = "Error renaming test: " + e;
-    }
-});
-
-// Teacher: load analytics
-loadAnalyticsBtn.addEventListener("click", async function () {
-    analyticsOutput.textContent = "";
-    const testId = testSelect.value;
-    dbg("Load analytics clicked, testId=", testId);
-    if (!testId) {
-        analyticsOutput.textContent = "Select a test first.";
-        return;
-    }
-    try {
-        const data = await fetchAnalytics(testId);
-        if (data.error) {
-            analyticsOutput.textContent = data.error;
-            return;
-        }
-        const a = data.analytics;
-        if (!a) {
-            analyticsOutput.textContent = "No analytics available yet.";
+        if (!currentDni) {
+            randomInfo.textContent = "Load your dashboard first.";
             return;
         }
 
-        const lines = [];
-        lines.push(
-            `<strong>Test:</strong> #${data.test.id} – ${data.test.title}`
-        );
-        lines.push("<br>");
+        try {
+            const resp = await fetch("/tests/random_from_bank", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    student_dni: currentDni,
+                    num_questions: numQuestions,
+                }),
+            });
+            dbg("create random test response status", resp.status);
+            if (!resp.ok) {
+                const txt = await resp.text();
+                dbg("create random test error body", txt);
+                randomInfo.textContent = "Error creating test: " + txt;
+                return;
+            }
+            const data = await resp.json();
+            dbg("create random test response json", data);
+            if (data.error) {
+                randomInfo.textContent = data.error;
+                return;
+            }
 
-        // Questions
-        if (a.most_failed_question) {
-            const q = a.most_failed_question;
-            const wr = q.wrong_rate != null ? (q.wrong_rate * 100).toFixed(1) : "-";
-            const cr =
-                q.correct_rate != null ? (q.correct_rate * 100).toFixed(1) : "-";
-            lines.push(
-                `<strong>Most failed question:</strong> [Q${q.question_id}] ` +
-                `${q.text} (wrong: ${q.wrong_count} / ${q.total_answers}, ${wr}%)`
+            // Redirect to quiz page with test_id
+            const testId = data.test_id;
+            window.location.href = `/quiz?test_id=${testId}`;
+        } catch (e) {
+            dbg("createRandomTest exception", e);
+            randomInfo.textContent = "Error creating test: " + e;
+        }
+    });
+
+    // View podium
+    viewPodiumBtn.addEventListener("click", async function () {
+        podiumInfo.textContent = "";
+        const testId = testSelect.value;
+        dbg("View podium clicked, testId=", testId);
+        if (!testId) {
+            showError("Select a test first.");
+            return;
+        }
+        try {
+            const data = await fetchAnalytics(testId);
+            if (data.error) {
+                podiumInfo.textContent = data.error;
+                return;
+            }
+            if (!data.analytics) {
+                podiumInfo.textContent = "No analytics available yet.";
+                return;
+            }
+            const html = [
+                `<strong>Test:</strong> #${data.test.id} – ${data.test.title}`,
+                "<br>",
+                formatPodiumHtml(data.analytics),
+            ].join("<br>");
+            podiumInfo.innerHTML = html;
+        } catch (e) {
+            dbg("viewPodium exception", e);
+            podiumInfo.textContent = "Error loading podium: " + e;
+        }
+    });
+
+    // Teacher: delete test
+    deleteTestBtn.addEventListener("click", async function () {
+        deleteTestInfo.textContent = "";
+        dbg("Delete test button clicked, role=", currentRole);
+        if (currentRole !== "teacher") {
+            deleteTestInfo.textContent =
+                "Only teachers can delete tests (role=teacher).";
+            return;
+        }
+        const testId = testSelect.value;
+        if (!testId) {
+            deleteTestInfo.textContent = "Select a test first.";
+            return;
+        }
+        if (
+            !confirm(
+                `Are you sure you want to delete test #${testId} ` +
+                "and ALL associated results? This cannot be undone."
+            )
+        ) {
+            dbg("Delete test canceled by user");
+            return;
+        }
+        try {
+            const resp = await fetch(
+                `/tests/${encodeURIComponent(testId)}?teacher_dni=${encodeURIComponent(currentDni)}`,
+                { method: "DELETE" }
             );
-        } else {
-            lines.push("<strong>Most failed question:</strong> no data yet.");
+            dbg("delete_test response status", resp.status);
+            if (!resp.ok) {
+                const txt = await resp.text();
+                dbg("delete_test error body", txt);
+                deleteTestInfo.textContent = "Error deleting test: " + txt;
+                return;
+            }
+            const data = await resp.json();
+            dbg("delete_test response json", data);
+            if (data.error) {
+                deleteTestInfo.textContent = data.error;
+                return;
+            }
+            deleteTestInfo.textContent = data.message || "Test deleted successfully.";
+
+            // Refresh tests list
+            loadDashboardBtn.click();
+        } catch (e) {
+            dbg("delete_test exception", e);
+            deleteTestInfo.textContent = "Error deleting test: " + e;
+        }
+    });
+
+    // Teacher: rename test
+    renameTestBtn.addEventListener("click", async function () {
+        deleteTestInfo.textContent = "";
+        dbg("Rename test button clicked, role=", currentRole);
+        if (currentRole !== "teacher") {
+            deleteTestInfo.textContent = "Only teachers can rename tests.";
+            return;
+        }
+        const testId = testSelect.value;
+        if (!testId) {
+            deleteTestInfo.textContent = "Select a test first.";
+            return;
         }
 
-        if (a.most_correct_question) {
-            const q = a.most_correct_question;
-            const wr = q.wrong_rate != null ? (q.wrong_rate * 100).toFixed(1) : "-";
-            const cr =
-                q.correct_rate != null ? (q.correct_rate * 100).toFixed(1) : "-";
+        const newTitle = prompt("Enter new title for this test:");
+        if (!newTitle || !newTitle.trim()) {
+            return; // Cancelled or empty
+        }
+
+        try {
+            const resp = await fetch(`/tests/${encodeURIComponent(testId)}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    title: newTitle.trim(),
+                    teacher_dni: currentDni
+                }),
+            });
+            dbg("rename_test response status", resp.status);
+            if (!resp.ok) {
+                const txt = await resp.text();
+                deleteTestInfo.textContent = "Error renaming test: " + txt;
+                return;
+            }
+            const data = await resp.json();
+            if (data.error) {
+                deleteTestInfo.textContent = data.error;
+                return;
+            }
+            deleteTestInfo.textContent = data.message || "Test renamed successfully.";
+
+            // Refresh tests list
+            loadDashboardBtn.click();
+        } catch (e) {
+            dbg("rename_test exception", e);
+            deleteTestInfo.textContent = "Error renaming test: " + e;
+        }
+    });
+
+    // Teacher: load analytics
+    loadAnalyticsBtn.addEventListener("click", async function () {
+        analyticsOutput.textContent = "";
+        const testId = testSelect.value;
+        dbg("Load analytics clicked, testId=", testId);
+        if (!testId) {
+            analyticsOutput.textContent = "Select a test first.";
+            return;
+        }
+        try {
+            const data = await fetchAnalytics(testId);
+            if (data.error) {
+                analyticsOutput.textContent = data.error;
+                return;
+            }
+            const a = data.analytics;
+            if (!a) {
+                analyticsOutput.textContent = "No analytics available yet.";
+                return;
+            }
+
+            const lines = [];
             lines.push(
-                `<strong>Most correct question:</strong> [Q${q.question_id}] ` +
-                `${q.text} (correct: ${q.correct_count} / ${q.total_answers}, ${cr}%)`
+                `<strong>Test:</strong> #${data.test.id} – ${data.test.title}`
             );
-        } else {
-            lines.push("<strong>Most correct question:</strong> no data yet.");
-        }
+            lines.push("<br>");
 
-        lines.push("<br>");
+            // Questions
+            if (a.most_failed_question) {
+                const q = a.most_failed_question;
+                const wr = q.wrong_rate != null ? (q.wrong_rate * 100).toFixed(1) : "-";
+                const cr =
+                    q.correct_rate != null ? (q.correct_rate * 100).toFixed(1) : "-";
+                lines.push(
+                    `<strong>Most failed question:</strong> [Q${q.question_id}] ` +
+                    `${q.text} (wrong: ${q.wrong_count} / ${q.total_answers}, ${wr}%)`
+                );
+            } else {
+                lines.push("<strong>Most failed question:</strong> no data yet.");
+            }
 
-        // Answers
-        if (a.most_failed_answer) {
-            const o = a.most_failed_answer;
-            const wr =
-                o.wrong_rate != null ? (o.wrong_rate * 100).toFixed(1) : "-";
+            if (a.most_correct_question) {
+                const q = a.most_correct_question;
+                const wr = q.wrong_rate != null ? (q.wrong_rate * 100).toFixed(1) : "-";
+                const cr =
+                    q.correct_rate != null ? (q.correct_rate * 100).toFixed(1) : "-";
+                lines.push(
+                    `<strong>Most correct question:</strong> [Q${q.question_id}] ` +
+                    `${q.text} (correct: ${q.correct_count} / ${q.total_answers}, ${cr}%)`
+                );
+            } else {
+                lines.push("<strong>Most correct question:</strong> no data yet.");
+            }
+
+            lines.push("<br>");
+
+            // Answers
+            if (a.most_failed_answer) {
+                const o = a.most_failed_answer;
+                const wr =
+                    o.wrong_rate != null ? (o.wrong_rate * 100).toFixed(1) : "-";
+                lines.push(
+                    `<strong>Most failed answer:</strong> ` +
+                    `"${o.option_text}" (Q${o.question_id}) ` +
+                    `– wrong: ${o.wrong_selected} / ${o.times_selected}, ${wr}%`
+                );
+            } else {
+                lines.push("<strong>Most failed answer:</strong> no data yet.");
+            }
+
+            if (a.most_correct_answer) {
+                const o = a.most_correct_answer;
+                const cr =
+                    o.correct_rate != null ? (o.correct_rate * 100).toFixed(1) : "-";
+                lines.push(
+                    `<strong>Most correct answer:</strong> ` +
+                    `"${o.option_text}" (Q${o.question_id}) ` +
+                    `– correct: ${o.correct_selected} / ${o.times_selected}, ${cr}%`
+                );
+            } else {
+                lines.push("<strong>Most correct answer:</strong> no data yet.");
+            }
+
+            lines.push("<br>");
+
+            // Attempts stats
+            const s = a.attempts_stats || {};
+            const avgAttempts =
+                s.avg_attempts_per_student != null
+                    ? s.avg_attempts_per_student.toFixed(2)
+                    : "-";
+            const avgPct =
+                s.avg_percentage != null ? s.avg_percentage.toFixed(2) + "%" : "-";
+
             lines.push(
-                `<strong>Most failed answer:</strong> ` +
-                `"${o.option_text}" (Q${o.question_id}) ` +
-                `– wrong: ${o.wrong_selected} / ${o.times_selected}, ${wr}%`
+                `<strong>Attempts:</strong> total ${s.total_attempts || 0}, ` +
+                `students ${s.num_students || 0}, ` +
+                `avg attempts / student ${avgAttempts}, ` +
+                `avg percentage ${avgPct}.`
             );
-        } else {
-            lines.push("<strong>Most failed answer:</strong> no data yet.");
+
+            lines.push("<br>");
+            lines.push(formatPodiumHtml(a));
+
+            analyticsOutput.innerHTML = lines.join("<br>");
+        } catch (e) {
+            dbg("loadAnalytics exception", e);
+            analyticsOutput.textContent = "Error loading analytics: " + e;
         }
+    });
 
-        if (a.most_correct_answer) {
-            const o = a.most_correct_answer;
-            const cr =
-                o.correct_rate != null ? (o.correct_rate * 100).toFixed(1) : "-";
-            lines.push(
-                `<strong>Most correct answer:</strong> ` +
-                `"${o.option_text}" (Q${o.question_id}) ` +
-                `– correct: ${o.correct_selected} / ${o.times_selected}, ${cr}%`
-            );
-        } else {
-            lines.push("<strong>Most correct answer:</strong> no data yet.");
-        }
-
-        lines.push("<br>");
-
-        // Attempts stats
-        const s = a.attempts_stats || {};
-        const avgAttempts =
-            s.avg_attempts_per_student != null
-                ? s.avg_attempts_per_student.toFixed(2)
-                : "-";
-        const avgPct =
-            s.avg_percentage != null ? s.avg_percentage.toFixed(2) + "%" : "-";
-
-        lines.push(
-            `<strong>Attempts:</strong> total ${s.total_attempts || 0}, ` +
-            `students ${s.num_students || 0}, ` +
-            `avg attempts / student ${avgAttempts}, ` +
-            `avg percentage ${avgPct}.`
-        );
-
-        lines.push("<br>");
-        lines.push(formatPodiumHtml(a));
-
-        analyticsOutput.innerHTML = lines.join("<br>");
-    } catch (e) {
-        dbg("loadAnalytics exception", e);
-        analyticsOutput.textContent = "Error loading analytics: " + e;
+    // ---------- On load: read cookie (do NOT auto-load, just prefill) ----------
+    const cookieDni = getCookie("quiz_dni");
+    if (cookieDni) {
+        dbg("Prefilling DNI from cookie:", cookieDni);
+        dniInput.value = cookieDni;
+    } else {
+        dbg("No quiz_dni cookie found on load");
     }
-});
-
-// ---------- On load: read cookie (do NOT auto-load, just prefill) ----------
-const cookieDni = getCookie("quiz_dni");
-if (cookieDni) {
-    dbg("Prefilling DNI from cookie:", cookieDni);
-    dniInput.value = cookieDni;
-} else {
-    dbg("No quiz_dni cookie found on load");
-}
-}) ();
+})();
