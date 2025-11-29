@@ -12,8 +12,20 @@ fi
 # Activate virtual environment
 source venv/bin/activate
 
+# Upgrade pip
+pip install --upgrade pip --quiet
+
+# Install uvicorn explicitly (in case it's missing from requirements)
+pip install uvicorn --quiet
+
 # Install/update dependencies
 pip install -r requirements.txt --quiet
+
+# Verify uvicorn exists
+if [ ! -f "venv/bin/uvicorn" ]; then
+    echo "ERROR: uvicorn not found after install!"
+    exit 1
+fi
 
 # Restart the staging service
 sudo systemctl restart quiz-backend-staging.service
