@@ -365,8 +365,7 @@
             const testsData = await fetchAvailableTests();
             let tests = testsData.tests || [];
 
-            // Filter: only show tests with attempts > 0 (as requested)
-            tests = tests.filter(t => t.attempts_count > 0);
+
 
             populateTestsSelect(tests);
 
