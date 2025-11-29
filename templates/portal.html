@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8" />
     <title>Cloud Digital Leader – Quiz Portal</title>
@@ -14,123 +15,133 @@
 
     <script defer src="/static/js/portal.js"></script>
 </head>
+
 <body>
-<div class="page">
-    <div class="toolbar">
-        <div>
-            <h1>Cloud Digital Leader – Quiz Portal</h1>
-            <div class="subtitle small">
-                Identify yourself with your DNI, choose a test, create a random one,
-                see the podium, and review your performance.
+    <div class="page">
+        <div class="toolbar">
+            <div>
+                <h1>Cloud Digital Leader – Quiz Portal</h1>
+                <div class="subtitle small">
+                    Identify yourself with your DNI, choose a test, create a random one,
+                    see the podium, and review your performance.
+                </div>
+            </div>
+            <div class="toolbar-buttons">
+                <button id="btn-home" class="toolbar-btn" type="button">Portal</button>
+                <button class="toolbar-btn" id="btn-dashboard">Dashboard</button>
+                <button id="btn-logout" class="toolbar-btn" type="button">End session</button>
+                <button id="theme-toggle" class="theme-toggle" type="button">Theme</button>
             </div>
         </div>
-        <div class="toolbar-buttons">
-            <button id="btn-home" class="toolbar-btn" type="button">Portal</button>
-            <button class="toolbar-btn" id="btn-dashboard">Dashboard</button>
-            <button id="btn-logout" class="toolbar-btn" type="button">End session</button>
-            <button id="theme-toggle" class="theme-toggle" type="button">Theme</button>
-        </div>
-    </div>
 
-    <div class="card">
-        <h2>1. Identify yourself</h2>
-        <p>Enter your <strong>ID (DNI)</strong> to load your personal dashboard.</p>
-        <label for="student-dni">Student / Teacher ID (DNI)</label><br>
-        <input type="text" id="student-dni" placeholder="00000001" />
-        <br>
-        <button id="load-dashboard" type="button">Load my dashboard</button>
-        <div id="error"></div>
-    </div>
-
-    <div id="dashboard" class="hidden">
         <div class="card">
-            <h2>2. Welcome</h2>
-            <p id="student-info" class="small"></p>
+            <h2>1. Identify yourself</h2>
+            <p>Enter your <strong>ID (DNI)</strong> to load your personal dashboard.</p>
+            <label for="student-dni">Student / Teacher ID (DNI)</label><br>
+            <input type="text" id="student-dni" placeholder="00000001" />
+            <br>
+            <button id="load-dashboard" type="button">Load my dashboard</button>
+            <div id="error"></div>
         </div>
 
-        <div class="two-columns">
+        <div id="dashboard" class="hidden">
             <div class="card">
-                <h2>3. Take a test</h2>
-                <label for="test-select">Available tests</label><br>
-                <select id="test-select"></select>
-                <br>
-                <button id="start-selected-test" type="button">Start selected test</button>
+                <h2>2. Welcome</h2>
+                <p id="student-info" class="small"></p>
+            </div>
+
+            <div class="two-columns">
+                <div class="card">
+                    <h2>3. Take a test</h2>
+                    <label for="test-select">Available tests</label><br>
+                    <select id="test-select"></select>
+                    <br>
+                    <button id="start-selected-test" type="button">Start selected test</button>
+
+                    <br><br>
+                    <button id="view-podium-btn" type="button">
+                        View podium for selected test
+                    </button>
+                    <div id="podium-info" class="small"></div>
+
+                    <hr style="margin: 1rem 0; border: none; border-top: 1px solid var(--border-color);" />
+
+                    <h3>Create a random test</h3>
+                    <p class="small">
+                        Creates a new test from the question bank (anyone can use it).
+                    </p>
+                    <label for="num-questions">Number of questions</label><br>
+                    <input type="number" id="num-questions" value="20" min="1" max="100" />
+                    <br>
+                    <button id="create-random-test" type="button">Create random test</button>
+                    <div id="random-info"></div>
+                </div>
+
+                <div class="card">
+                    <h2>4. My attempts</h2>
+                    <div id="attempts-empty" class="small hidden">
+                        You have no attempts yet.
+                    </div>
+                    <div id="attempts-table-wrapper" class="hidden">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Test</th>
+                                    <th>#</th>
+                                    <th>Score</th>
+                                    <th>%</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attempts-table-body"></tbody>
+                        </table>
+                    </div>
+                    <div style="margin-top: 0.8rem;">
+                        <canvas id="attempts-chart" height="120"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div id="teacher-panel" class="card hidden">
+                <h2>5. Teacher tools</h2>
+                <p class="small">
+                    You are logged in as a <strong>teacher</strong>. You can delete tests
+                    and view detailed analytics.
+                </p>
+
+                <h3>Delete a test</h3>
+                <p class="small">
+                    Select a test above and delete it, including all associated attempts and answers.
+                </p>
+                <button id="delete-test-btn" type="button">
+                    Delete selected test (irreversible)
+                </button>
+                <div id="delete-test-info" class="small"></div>
 
                 <br><br>
-                <button id="view-podium-btn" type="button">
-                    View podium for selected test
+                <h3>Rename a test</h3>
+                <p class="small">
+                    Select a test above and rename it.
+                </p>
+                <button id="rename-test-btn" type="button">
+                    Rename selected test
                 </button>
-                <div id="podium-info" class="small"></div>
 
                 <hr style="margin: 1rem 0; border: none; border-top: 1px solid var(--border-color);" />
 
-                <h3>Create a random test</h3>
+                <h3>Test analytics</h3>
                 <p class="small">
-                    Creates a new test from the question bank (anyone can use it).
+                    View most failed / correct questions and answers, attempt statistics,
+                    and the podium for the selected test.
                 </p>
-                <label for="num-questions">Number of questions</label><br>
-                <input type="number" id="num-questions" value="20" min="1" max="100" />
-                <br>
-                <button id="create-random-test" type="button">Create random test</button>
-                <div id="random-info"></div>
+                <button id="load-analytics-btn" type="button">
+                    Show analytics for selected test
+                </button>
+                <div id="analytics-output" class="small" style="margin-top: 0.7rem;"></div>
             </div>
-
-            <div class="card">
-                <h2>4. My attempts</h2>
-                <div id="attempts-empty" class="small hidden">
-                    You have no attempts yet.
-                </div>
-                <div id="attempts-table-wrapper" class="hidden">
-                    <table>
-                        <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Test</th>
-                            <th>#</th>
-                            <th>Score</th>
-                            <th>%</th>
-                            <th>Status</th>
-                        </tr>
-                        </thead>
-                        <tbody id="attempts-table-body"></tbody>
-                    </table>
-                </div>
-                <div style="margin-top: 0.8rem;">
-                    <canvas id="attempts-chart" height="120"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <div id="teacher-panel" class="card hidden">
-            <h2>5. Teacher tools</h2>
-            <p class="small">
-                You are logged in as a <strong>teacher</strong>. You can delete tests
-                and view detailed analytics.
-            </p>
-
-            <h3>Delete a test</h3>
-            <p class="small">
-                Select a test above and delete it, including all associated attempts and answers.
-            </p>
-            <button id="delete-test-btn" type="button">
-                Delete selected test (irreversible)
-            </button>
-            <div id="delete-test-info" class="small"></div>
-
-            <hr style="margin: 1rem 0; border: none; border-top: 1px solid var(--border-color);" />
-
-            <h3>Test analytics</h3>
-            <p class="small">
-                View most failed / correct questions and answers, attempt statistics,
-                and the podium for the selected test.
-            </p>
-            <button id="load-analytics-btn" type="button">
-                Show analytics for selected test
-            </button>
-            <div id="analytics-output" class="small" style="margin-top: 0.7rem;"></div>
         </div>
     </div>
-</div>
 </body>
-</html>
 
+</html>
