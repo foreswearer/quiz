@@ -6,6 +6,39 @@
     <title>Teacher Dashboard - Quiz Platform</title>
     <link rel="stylesheet" href="/static/css/base.css">
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <style>
+        .site-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            border-top: 1px solid var(--border-color);
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            z-index: 100;
+        }
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            gap: 1rem;
+        }
+        .site-footer .version {
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .site-footer .disclaimer {
+            text-align: right;
+        }
+        /* Add padding to page so footer doesn't overlap content */
+        .page {
+            padding-bottom: 3rem;
+        }
+    </style>
 </head>
 <body>
     <div class="page">
@@ -105,6 +138,13 @@
         <!-- Error display -->
         <div id="error" class="hidden"></div>
     </div>
+
+    <footer class="site-footer">
+        <div class="footer-content">
+            <span class="version">v1.0.0</span>
+            <span class="disclaimer">Cloud Digital Leader Quiz Platform – For educational purposes only. Not affiliated with Google Cloud.</span>
+        </div>
+    </footer>
 
     <!-- Chart.js from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
