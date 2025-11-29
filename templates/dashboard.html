@@ -141,10 +141,22 @@
 
     <footer class="site-footer">
         <div class="footer-content">
-            <span class="version">v1.0.0</span>
+            <span class="version" id="app-version">v...</span>
             <span class="disclaimer">Cloud Digital Leader Quiz Platform – For educational purposes only. Not affiliated with Google Cloud.</span>
         </div>
     </footer>
+
+    <script>
+        // Fetch and display version
+        fetch('/version')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('app-version').textContent = 'v' + (data.version || '?');
+            })
+            .catch(() => {
+                document.getElementById('app-version').textContent = 'v?';
+            });
+    </script>
 
     <!-- Chart.js from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
