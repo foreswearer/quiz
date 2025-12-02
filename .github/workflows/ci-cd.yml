@@ -1,0 +1,182 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  quality:
+    name: Quality Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest httpx
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+      - name: Lint with Ruff
+        run: |
+          # Run ruff for linting
+          ruff check .
+          # Run ruff for formatting check
+          ruff format --check .
+      - name: Run Tests
+        run: |
+          if [ -d tests ]; then
+            PYTHONPATH=. pytest
+          else
+            echo "No tests directory found, skipping tests."
+          fi
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: quality
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+      - name: Deploy to Staging with rsync
+        run: |
+          rsync -avz --delete \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='venv/' \
+            --exclude='__pycache__/' \
+            --exclude='*.pyc' \
+            -e "ssh -o StrictHostKeyChecking=no" \
+            . ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/ramiro_rego/quiz-backend-staging
+      - name: Execute Staging Deploy Script
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /home/ramiro_rego/quiz-backend-staging
+            ./deploy_staging.sh
+      - name: Verify Staging Service
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            echo "=== Staging deployment verification ==="
+            
+            echo "Checking staging service status..."
+            sudo systemctl status quiz-backend-staging.service --no-pager || true
+            
+            echo ""
+            echo "Checking if staging is listening on port 8001..."
+            ss -tlnp | grep 8001 || echo "⚠️  Port 8001 not listening"
+            
+            echo ""
+            echo "Attempting health check on staging (port 8001)..."
+            for i in {1..10}; do
+              if curl -f http://localhost:8001/health > /dev/null 2>&1; then
+                echo "✅ Staging health check passed!"
+                curl -s http://localhost:8001/version
+                exit 0
+              fi
+              echo "⏳ Attempt $i/10: Waiting for staging service..."
+              sleep 3
+            done
+            
+            echo ""
+            echo "❌ Staging health check failed after 10 attempts"
+            echo ""
+            echo "=== Diagnostic Information ==="
+            echo "Service logs (last 50 lines):"
+            sudo journalctl -u quiz-backend-staging.service -n 50 --no-pager
+            
+            exit 1
+
+  deploy-production:
+    name: Deploy to Production
+    needs: quality
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+      - name: Deploy to Production with rsync
+        run: |
+          rsync -avz --delete \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='venv/' \
+            --exclude='__pycache__/' \
+            --exclude='*.pyc' \
+            -e "ssh -o StrictHostKeyChecking=no" \
+            . ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/ramiro_rego/quiz-backend
+      - name: Execute Production Deploy Script
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /home/ramiro_rego/quiz-backend
+            ./deploy.sh
+      - name: Verify Production Service and Health Check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            echo "=== Production deployment verification ==="
+            
+            echo "Checking production service status..."
+            sudo systemctl status quiz-backend.service --no-pager || true
+            
+            echo ""
+            echo "Checking if production is listening on port 8000..."
+            ss -tlnp | grep 8000 || echo "⚠️  Port 8000 not listening"
+            
+            echo ""
+            echo "Attempting health check via NGINX (HTTPS on port 443)..."
+            for i in {1..10}; do
+              if curl -f -k https://localhost/docs > /dev/null 2>&1; then
+                echo "✅ Production health check passed!"
+                curl -s -k https://localhost/version
+                exit 0
+              fi
+              echo "⏳ Attempt $i/10: Waiting for production service..."
+              sleep 3
+            done
+            
+            echo ""
+            echo "❌ Production health check failed after 10 attempts"
+            echo ""
+            echo "=== Diagnostic Information ==="
+            echo "Service logs (last 50 lines):"
+            sudo journalctl -u quiz-backend.service -n 50 --no-pager
+            echo ""
+            echo "NGINX error log (last 20 lines):"
+            sudo tail -n 20 /var/log/nginx/error.log || echo "Cannot read NGINX error log"
+            
+            exit 1

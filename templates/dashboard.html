@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Dashboard - Quiz Platform</title>
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <style>
+        .site-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            border-top: 1px solid var(--border-color);
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            z-index: 100;
+        }
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            gap: 1rem;
+        }
+        .site-footer .version {
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .site-footer .disclaimer {
+            text-align: right;
+        }
+        /* Add padding to page so footer doesn't overlap content */
+        .page {
+            padding-bottom: 3rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div>
+                <h1>Teacher Dashboard</h1>
+                <p class="subtitle" id="teacher-name">Loading...</p>
+            </div>
+            <div class="toolbar-buttons">
+                <button class="toolbar-btn" onclick="window.location.href='/'">Portal</button>
+                <button class="toolbar-btn" id="end-session-btn">End Session</button>
+                <button class="theme-toggle" id="theme-toggle">🌙</button>
+            </div>
+        </div>
+
+        <!-- Summary KPIs -->
+        <div class="card">
+            <h2>Overview</h2>
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-value" id="kpi-students">-</div>
+                    <div class="kpi-label">Total Students</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value" id="kpi-tests">-</div>
+                    <div class="kpi-label">Total Tests</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value" id="kpi-attempts">-</div>
+                    <div class="kpi-label">Total Attempts</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value" id="kpi-recent">-</div>
+                    <div class="kpi-label">Last 7 Days</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value" id="kpi-avg">-</div>
+                    <div class="kpi-label">Average Score</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row 1 -->
+        <div class="two-columns">
+            <div class="card">
+                <h2>Attempts Over Time</h2>
+                <canvas id="chart-attempts-time"></canvas>
+            </div>
+            <div class="card">
+                <h2>Average Score by Test</h2>
+                <canvas id="chart-test-scores"></canvas>
+            </div>
+        </div>
+
+        <!-- Charts Row 2 -->
+        <div class="two-columns">
+            <div class="card">
+                <h2>Hardest Questions (Top 10)</h2>
+                <div class="table-container">
+                    <table id="hardest-questions-table">
+                        <thead>
+                            <tr>
+                                <th>Question</th>
+                                <th>Correct</th>
+                                <th>Wrong</th>
+                                <th>Wrong Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="4" class="loading-text">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Test Performance Summary</h2>
+                <div class="table-container">
+                    <table id="test-summary-table">
+                        <thead>
+                            <tr>
+                                <th>Test</th>
+                                <th>Attempts</th>
+                                <th>Avg %</th>
+                                <th>Min %</th>
+                                <th>Max %</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="5" class="loading-text">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error display -->
+        <div id="error" class="hidden"></div>
+    </div>
+
+    <footer class="site-footer">
+        <div class="footer-content">
+            <span class="version" id="app-version">v...</span>
+            <span class="disclaimer">Cloud Digital Leader Quiz Platform – For educational purposes only. Not affiliated with Google Cloud.</span>
+        </div>
+    </footer>
+
+    <script>
+        // Fetch and display version
+        fetch('/version')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('app-version').textContent = 'v' + (data.version || '?');
+            })
+            .catch(() => {
+                document.getElementById('app-version').textContent = 'v?';
+            });
+    </script>
+
+    <!-- Chart.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

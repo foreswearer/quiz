@@ -1,0 +1,43 @@
+name: Sync Staging DB from Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "sync" to confirm'
+        required: true
+
+jobs:
+  sync-database:
+    name: Sync Production → Staging
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'sync'
+    steps:
+      - name: Sync Database
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            echo "=== Syncing Production DB → Staging DB ==="
+            
+            echo "Stopping staging service..."
+            sudo systemctl stop quiz-backend-staging.service
+            
+            echo "Killing staging DB connections..."
+            sudo -u postgres psql -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'quiz_platform_staging' AND pid <> pg_backend_pid();" || true
+            
+            echo "Dropping staging database..."
+            sudo -u postgres psql -c "DROP DATABASE IF EXISTS quiz_platform_staging;"
+            
+            echo "Creating fresh staging database..."
+            sudo -u postgres psql -c "CREATE DATABASE quiz_platform_staging;"
+            
+            echo "Copying production data to staging..."
+            sudo -u postgres pg_dump quiz_platform | sudo -u postgres psql quiz_platform_staging
+            
+            echo "Restarting staging service..."
+            sudo systemctl start quiz-backend-staging.service
+            
+            echo "=== Done! Staging DB now matches Production ==="

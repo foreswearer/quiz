@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Cloud Digital Leader – Practice Quiz</title>
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/quiz.css">
+
+    <!-- Debug configuration -->
+    <script>
+        window.QUIZ_VERBOSE = true;
+    </script>
+
+    <script defer src="/static/js/quiz.js"></script>
+    <style>
+        .site-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            border-top: 1px solid var(--border-color);
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            z-index: 100;
+        }
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            gap: 1rem;
+        }
+        .site-footer .version {
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .site-footer .disclaimer {
+            text-align: right;
+        }
+        /* Add padding to page so footer doesn't overlap content */
+        .page {
+            padding-bottom: 3rem;
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <div class="toolbar">
+        <div>
+            <h1>Cloud Digital Leader – Practice Quiz</h1>
+            <div class="subtitle small">
+                You are taking a specific test. Use the menu to go back or end your session.
+            </div>
+        </div>
+        <div class="toolbar-buttons">
+            <button id="btn-home" class="toolbar-btn" type="button">Portal</button>
+            <button id="btn-logout" class="toolbar-btn" type="button">End session</button>
+            <button id="theme-toggle" class="theme-toggle" type="button">🌙</button>
+        </div>
+    </div>
+
+    <div id="error" class="hidden" style="color: var(--danger-color); margin: 1rem 0;"></div>
+
+    <div id="quiz-container" class="card">
+        <h2 id="test-title">Loading...</h2>
+        <p id="test-description" class="small"></p>
+        <form id="quiz-form">
+            <div id="questions"></div>
+            <button type="submit">Submit answers</button>
+        </form>
+        <div id="result"></div>
+    </div>
+</div>
+
+<footer class="site-footer">
+    <div class="footer-content">
+        <span class="version" id="app-version">v...</span>
+        <span class="disclaimer">Cloud Digital Leader Quiz Platform – For educational purposes only. Not affiliated with Google Cloud.</span>
+    </div>
+</footer>
+
+<script>
+    // Fetch and display version
+    fetch('/version')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('app-version').textContent = 'v' + (data.version || '?');
+        })
+        .catch(() => {
+            document.getElementById('app-version').textContent = 'v?';
+        });
+</script>
+</body>
+</html>
