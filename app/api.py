@@ -441,12 +441,12 @@ def submit_attempt(attempt_id: int, payload: SubmitRequest):
 
                 total_score += earned
 
-                # Persist answer
-                if selected_option_id is not None:
+                # Persist answer - only if an option was actually selected
+                if selected_option_id is not None and selected_option_id != 0:
                     cur.execute(
                         """
                         INSERT INTO student_answer (
-                            attempt_id, question_id,
+                            attempt_id  , question_id,
                             selected_option_id,
                             is_correct, score
                         )
