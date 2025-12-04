@@ -95,6 +95,7 @@
     let quizForm = null;
     let resultDiv = null;
     let testTitleElem = null;
+    let testDescElem = null;
     let currentTestId = null;
     let currentAttemptId = null;
     let currentDni = null;
@@ -103,11 +104,25 @@
 
     function showError(msg) {
         console.error("[quiz] ERROR:", msg);
+        const errorDiv = document.getElementById("error");
+        if (errorDiv) {
+            errorDiv.textContent = msg;
+            errorDiv.classList.remove("hidden");
+        }
         if (resultDiv) {
             resultDiv.textContent = msg;
             resultDiv.style.color = "var(--danger-color)";
         }
     }
+    
+    function clearError() {
+        const errorDiv = document.getElementById("error");
+        if (errorDiv) {
+            errorDiv.textContent = "";
+            errorDiv.classList.add("hidden");
+        }
+    }
+    
     function clearResult() {
         if (resultDiv) {
             resultDiv.textContent = "";
@@ -122,13 +137,13 @@
     }
 
     // ---------- Build quiz UI ----------
-// ---------- Build quiz UI ----------
     function ensureQuizUi() {
         // Use existing elements from HTML
         questionsContainer = document.getElementById("questions");
         quizForm = document.getElementById("quiz-form");
         resultDiv = document.getElementById("result");
         testTitleElem = document.getElementById("test-title");
+        testDescElem = document.getElementById("test-description");
 
         if (questionsContainer && quizForm && resultDiv && testTitleElem) {
             dbg("Using existing HTML elements");
@@ -147,6 +162,10 @@
         const h2 = document.createElement("h2");
         h2.id = "test-title";
         h2.textContent = "Test";
+
+        const desc = document.createElement("p");
+        desc.id = "test-description";
+        desc.className = "small";
 
         const form = document.createElement("form");
         form.id = "quiz-form";
@@ -172,6 +191,7 @@
         form.appendChild(result);
 
         card.appendChild(h2);
+        card.appendChild(desc);
         card.appendChild(form);
         page.appendChild(card);
 
@@ -179,14 +199,58 @@
         quizForm = form;
         resultDiv = result;
         testTitleElem = h2;
+        testDescElem = desc;
 
         quizForm.addEventListener("submit", submitQuiz);
+    }
+
+    // ---------- Show attempt info ----------
+    function showAttemptInfo(attemptNumber, maxAttempts, attemptsRemaining) {
+        let infoText = `Attempt ${attemptNumber}`;
+        
+        if (maxAttempts !== null && maxAttempts !== undefined) {
+            infoText += ` of ${maxAttempts}`;
+            if (attemptsRemaining !== null && attemptsRemaining !== undefined) {
+                if (attemptsRemaining > 0) {
+                    infoText += ` (${attemptsRemaining} remaining)`;
+                } else {
+                    infoText += ` (last attempt!)`;
+                }
+            }
+        } else {
+            infoText += ` (unlimited attempts)`;
+        }
+        
+        if (testDescElem) {
+            testDescElem.textContent = infoText;
+        }
+        dbg("Attempt info:", infoText);
+    }
+
+    // ---------- Show max attempts reached error ----------
+    function showMaxAttemptsError(maxAttempts, currentAttempts) {
+        const container = document.getElementById("quiz-container");
+        if (!container) return;
+        
+        container.innerHTML = `
+            <h2>Maximum Attempts Reached</h2>
+            <p style="color: var(--danger-color); margin: 1rem 0;">
+                You have used all ${maxAttempts} attempt(s) for this test.
+            </p>
+            <p>Current attempts: ${currentAttempts} / ${maxAttempts}</p>
+            <div style="margin-top: 1.5rem;">
+                <button type="button" onclick="window.location.href='/'">
+                    ← Back to Portal
+                </button>
+            </div>
+        `;
     }
 
     // ---------- Backend calls ----------
     async function startTest(testId, dni) {
         dbg("startTest() BEGIN testId=", testId, "dni=", dni);
         clearResult();
+        clearError();
 
         const url = `/tests/${encodeURIComponent(
             testId
@@ -279,58 +343,55 @@
     }
 
     // ---------- Collect answers & feedback ----------
-function collectAnswers() {
-    dbg("collectAnswers()");
+    function collectAnswers() {
+        dbg("collectAnswers()");
 
-    const answers = [];
-    let unanswered = 0;
+        const answers = [];
+        let unanswered = 0;
 
-    currentQuestions.forEach((q) => {
-        const qId = q.id;
-        const selector = `.option-label[data-question-id="${qId}"] input`;
-        const inputs = questionsContainer
-            ? questionsContainer.querySelectorAll(selector)
-            : [];
+        currentQuestions.forEach((q) => {
+            const qId = q.id;
+            const selector = `.option-label[data-question-id="${qId}"] input`;
+            const inputs = questionsContainer
+                ? questionsContainer.querySelectorAll(selector)
+                : [];
 
-        const selectedIds = [];
+            const selectedIds = [];
 
-        inputs.forEach((input) => {
-            const el = /** @type {HTMLInputElement} */ (input);
-            if (el.checked) {
-                const raw = el.value;
-                const parsed = parseInt(raw, 10);
+            inputs.forEach((input) => {
+                const el = /** @type {HTMLInputElement} */ (input);
+                if (el.checked) {
+                    const raw = el.value;
+                    const parsed = parseInt(raw, 10);
 
-                if (Number.isNaN(parsed)) {
-                    // This is the important change: never push NaN
-                    dbg(
-                        "collectAnswers(): NaN option id for question",
-                        qId,
-                        "raw value=",
-                        raw
-                    );
-                } else {
-                    selectedIds.push(parsed);
+                    if (Number.isNaN(parsed)) {
+                        dbg(
+                            "collectAnswers(): NaN option id for question",
+                            qId,
+                            "raw value=",
+                            raw
+                        );
+                    } else {
+                        selectedIds.push(parsed);
+                    }
                 }
+            });
+
+            if (selectedIds.length === 0) {
+                unanswered += 1;
+                // Don't include unanswered questions - API handles them as score 0
+            } else {
+                // Only push answered questions to avoid foreign key errors
+                answers.push({
+                    question_id: qId,
+                    selected_option_id: selectedIds[0],
+                    selected_option_ids: selectedIds,
+                });
             }
         });
 
-        if (selectedIds.length === 0) {
-            unanswered += 1;
-        }
-
-        // Backend expects an INTEGER, never null.
-        // 0 will mean "no answer" (always wrong, but passes validation).
-        const firstSelected = selectedIds.length > 0 ? selectedIds[0] : 0;
-
-        answers.push({
-            question_id: qId,
-            selected_option_id: firstSelected,
-            selected_option_ids: selectedIds,
-        });
-    });
-
-    dbg("collectAnswers() -> answers payload:", answers);
-    return answers;
+        dbg("collectAnswers() -> answers payload:", answers);
+        return answers;
     }
 
     function clearOptionFeedback() {
@@ -391,6 +452,42 @@ function collectAnswers() {
         });
     }
 
+    // ---------- Show retry button ----------
+    function showRetryButton(canRetry, attemptsRemaining, maxAttempts) {
+        if (!resultDiv) return;
+        
+        const existingRetry = document.getElementById("retry-btn");
+        if (existingRetry) existingRetry.remove();
+        
+        if (canRetry) {
+            const retryBtn = document.createElement("button");
+            retryBtn.id = "retry-btn";
+            retryBtn.type = "button";
+            retryBtn.style.marginTop = "1rem";
+            retryBtn.style.marginLeft = "0.5rem";
+            
+            if (attemptsRemaining !== null && attemptsRemaining !== undefined) {
+                retryBtn.textContent = `🔄 Retry Test (${attemptsRemaining} attempt${attemptsRemaining !== 1 ? 's' : ''} left)`;
+            } else {
+                retryBtn.textContent = "🔄 Retry Test";
+            }
+            
+            retryBtn.addEventListener("click", () => {
+                // Reload the page to start a new attempt
+                window.location.reload();
+            });
+            
+            resultDiv.appendChild(document.createElement("br"));
+            resultDiv.appendChild(retryBtn);
+        } else if (maxAttempts !== null) {
+            const noMoreMsg = document.createElement("p");
+            noMoreMsg.style.color = "var(--text-muted)";
+            noMoreMsg.style.marginTop = "0.5rem";
+            noMoreMsg.textContent = "No more attempts available for this test.";
+            resultDiv.appendChild(noMoreMsg);
+        }
+    }
+
     // ---------- Submit quiz ----------
     async function submitQuiz(event) {
         event.preventDefault();
@@ -402,7 +499,7 @@ function collectAnswers() {
         }
 
         const answers = collectAnswers();
-        if (!answers) return; // user cancelled because of unanswered
+        if (!answers) return;
 
         try {
             const url = `/attempts/${encodeURIComponent(currentAttemptId)}/submit`;
@@ -448,9 +545,10 @@ function collectAnswers() {
             if (resultDiv) {
                 resultDiv.style.color = "";
                 resultDiv.innerHTML =
-                    `Result: <strong>${score}/${maxScore}</strong> ` +
-                    `(${pct}) - status: ${data.status || "submitted"}.`;
+                    `<strong>Result: ${score}/${maxScore}</strong> ` +
+                    `(${pct})`;
             }
+            
             // Hide submit button after submission
             const submitBtn = document.querySelector('#quiz-form button[type="submit"]');
             if (submitBtn) {
@@ -458,12 +556,18 @@ function collectAnswers() {
             }
 
             // Disable all radio buttons (prevent changes after submit)
-            const allInputs = document.querySelectorAll('#quiz-form input[type="radio"]');
+            const allInputs = document.querySelectorAll('#quiz-form input[type="radio"], #quiz-form input[type="checkbox"]');
             allInputs.forEach(input => input.disabled = true);
 
             const perQuestion = data.details || data.per_question || [];
             dbg("submitQuiz() perQuestion for feedback:", perQuestion);
             applyFeedback(perQuestion);
+            
+            // Check if retry is available and show button
+            // We need to fetch attempt info again or use stored data
+            // For now, always show retry (the start will check max_attempts)
+            showRetryButton(true, null, null);
+            
         } catch (e) {
             showError("Error submitting answers: " + e);
         }
@@ -503,16 +607,26 @@ function collectAnswers() {
             
             // Check for error in response (e.g., max attempts reached)
             if (data.error) {
-                showError(data.error);
-                // Redirect back to portal after a delay
-                setTimeout(() => {
-                    window.location.href = "/";
-                }, 3000);
+                dbg("Error from API:", data.error);
+                
+                // Check if it's a max attempts error
+                if (data.max_attempts !== undefined && data.can_retry === false) {
+                    showMaxAttemptsError(data.max_attempts, data.current_attempts);
+                } else {
+                    showError(data.error);
+                }
                 return;
             }
             
             currentAttemptId = data.attempt_id;
             dbg("Current attempt_id =", currentAttemptId);
+            
+            // Show attempt info
+            showAttemptInfo(
+                data.attempt_number,
+                data.max_attempts,
+                data.attempts_remaining
+            );
 
             let test = null;
 

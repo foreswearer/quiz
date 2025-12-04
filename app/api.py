@@ -43,18 +43,17 @@ def available_tests():
                     t.title,
                     t.description,
                     COALESCE(t.total_points, 0)::float AS total_points,
-                    COUNT(tq.question_id) AS num_questions,
-                    t.max_attempts
+                    COUNT(tq.question_id) AS num_questions
                 FROM test t
                 LEFT JOIN test_question tq ON tq.test_id = t.id
-                GROUP BY t.id, t.title, t.description, t.total_points, t.max_attempts
+                GROUP BY t.id, t.title, t.description, t.total_points
                 ORDER BY t.id
                 """
             )
             rows = cur.fetchall()
 
             tests: List[Dict[str, Any]] = []
-            for tid, title, desc, total_points, num_questions, max_attempts in rows:
+            for tid, title, desc, total_points, num_questions in rows:
                 tests.append(
                     {
                         "id": tid,
@@ -62,7 +61,6 @@ def available_tests():
                         "description": desc,
                         "total_points": total_points,
                         "num_questions": int(num_questions),
-                        "max_attempts": max_attempts,
                     }
                 )
             return {"tests": tests}
@@ -165,7 +163,7 @@ def start_test(
     """
     Start a test attempt for the user identified by DNI.
     Teachers can also start attempts (for self-testing).
-    Respects max_attempts limit if set on the test.
+    Returns attempt info including max_attempts and current attempt count.
     """
     conn = get_connection()
     try:
@@ -185,6 +183,7 @@ def start_test(
 
             student_id, student_name, s_email, s_dni, s_role = student_row
 
+            # Get test info INCLUDING max_attempts
             cur.execute(
                 """
                 SELECT id, course_id, title, description, total_points, max_attempts
@@ -197,52 +196,38 @@ def start_test(
             if test_row is None:
                 return {"error": f"test {test_id} not found"}
 
-            max_attempts = test_row[5]  # Can be NULL (unlimited)
-
             test_info = {
                 "id": test_row[0],
                 "course_id": test_row[1],
                 "title": test_row[2],
                 "description": test_row[3],
                 "total_points": float(test_row[4]) if test_row[4] is not None else None,
-                "max_attempts": max_attempts,
+                "max_attempts": test_row[5],  # Can be NULL (unlimited)
             }
 
-            # Count user's graded attempts for this test
+            # Count existing attempts for this user on this test
             cur.execute(
                 """
                 SELECT COUNT(*)
-                FROM test_attempt
-                WHERE test_id = %s AND student_id = %s AND status = 'graded'
-                """,
-                (test_id, student_id),
-            )
-            graded_attempts = cur.fetchone()[0] or 0
-
-            # Check if user has exceeded max attempts
-            if max_attempts is not None and graded_attempts >= max_attempts:
-                return {
-                    "error": f"Maximum attempts reached ({max_attempts}). You cannot take this test again.",
-                    "max_attempts": max_attempts,
-                    "attempts_used": graded_attempts,
-                    "attempts_remaining": 0,
-                }
-
-            # Calculate remaining attempts
-            attempts_remaining = None
-            if max_attempts is not None:
-                attempts_remaining = max_attempts - graded_attempts
-
-            # Next attempt number
-            cur.execute(
-                """
-                SELECT COALESCE(MAX(attempt_number), 0) + 1
                 FROM test_attempt
                 WHERE test_id = %s AND student_id = %s
                 """,
                 (test_id, student_id),
             )
-            attempt_number = cur.fetchone()[0]
+            current_attempts = cur.fetchone()[0] or 0
+
+            # Check if max attempts reached (only if max_attempts is set)
+            max_attempts = test_info["max_attempts"]
+            if max_attempts is not None and current_attempts >= max_attempts:
+                return {
+                    "error": f"Maximum attempts reached ({max_attempts}).",
+                    "max_attempts": max_attempts,
+                    "current_attempts": current_attempts,
+                    "can_retry": False,
+                }
+
+            # Next attempt number
+            attempt_number = current_attempts + 1
 
             # Max score: 0.5 per question
             cur.execute(
@@ -321,11 +306,17 @@ def start_test(
 
             conn.commit()
 
+            # Calculate attempts remaining
+            attempts_remaining = None
+            if max_attempts is not None:
+                attempts_remaining = max_attempts - attempt_number
+
             return {
                 "attempt_id": attempt_id,
                 "attempt_number": attempt_number,
-                "attempts_used": graded_attempts,
+                "max_attempts": max_attempts,  # NULL means unlimited
                 "attempts_remaining": attempts_remaining,
+                "can_retry": attempts_remaining is None or attempts_remaining > 0,
                 "student": {
                     "id": student_id,
                     "name": student_name,
@@ -722,30 +713,10 @@ def student_attempts(dni: str):
 def create_random_test(req: RandomTestRequest):
     """
     Create a random test from the question bank for a given course.
-    Optionally accepts a custom title and max_attempts (teachers only).
     """
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            # Get user ID and role from DNI
-            cur.execute(
-                "SELECT id, full_name, role FROM app_user WHERE dni = %s",
-                (req.student_dni,),
-            )
-            user_row = cur.fetchone()
-            if user_row is None:
-                return {"error": f"user with DNI {req.student_dni} not found"}
-            user_id, user_name, user_role = user_row
-
-            # Only teachers can set max_attempts
-            max_attempts = None
-            if req.max_attempts is not None:
-                if user_role != "teacher":
-                    return {"error": "Only teachers can set max attempts limit"}
-                if req.max_attempts < 1:
-                    return {"error": "Max attempts must be at least 1"}
-                max_attempts = req.max_attempts
-
             # Resolve course
             cur.execute(
                 "SELECT id, name FROM course WHERE code = %s",
@@ -762,21 +733,19 @@ def create_random_test(req: RandomTestRequest):
             if req.title and req.title.strip():
                 title = req.title.strip()
             else:
-                title = f"Random {n} — created by {user_name}"
-
+                title = f"Random {n} – created by {req.student_dni}"
             description = (
                 f"Random {n}-question test from course "
                 f"{req.course_code} ({course_name})."
             )
 
-            # Insert test with created_by and max_attempts
             cur.execute(
                 """
-                INSERT INTO test (course_id, title, description, total_points, created_by, max_attempts)
-                VALUES (%s, %s, %s, NULL, %s, %s)
+                INSERT INTO test (course_id, title, description, total_points, max_attempts)
+                VALUES (%s, %s, %s, NULL, %s)
                 RETURNING id
                 """,
-                (course_id, title, description, user_id, max_attempts),
+                (course_id, title, description, req.max_attempts),
             )
             test_id = cur.fetchone()[0]
 
@@ -822,8 +791,6 @@ def create_random_test(req: RandomTestRequest):
                 "title": title,
                 "description": description,
                 "num_questions": actual_n,
-                "created_by": user_id,
-                "max_attempts": max_attempts,
             }
     finally:
         conn.close()
@@ -956,51 +923,34 @@ def delete_test(
 @router.put("/tests/{test_id}")
 def rename_test(test_id: int, data: dict):
     """
-    Rename a test.
-    - Teachers can rename ANY test
-    - Users can rename tests they created
+    Rename a test. Only teachers can rename tests.
     """
     title = data.get("title")
-    # Support both user_dni and teacher_dni for backwards compatibility
-    user_dni = data.get("user_dni") or data.get("teacher_dni")
+    teacher_dni = data.get("teacher_dni")
 
     if not title or not title.strip():
         return {"error": "Title cannot be empty"}
-    if not user_dni:
-        return {"error": "User DNI required"}
+    if not teacher_dni:
+        return {"error": "Teacher DNI required"}
 
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            # Get user info
+            # Verify teacher
             cur.execute(
                 "SELECT id, role FROM app_user WHERE dni = %s",
-                (user_dni,),
+                (teacher_dni,),
             )
             user_row = cur.fetchone()
             if user_row is None:
-                return {"error": f"User with DNI {user_dni} not found"}
-            user_id, user_role = user_row
+                return {"error": f"User with DNI {teacher_dni} not found"}
+            if user_row[1] != "teacher":
+                return {"error": "Only teachers can rename tests"}
 
-            # Check test exists and get created_by
-            cur.execute(
-                "SELECT id, created_by FROM test WHERE id = %s",
-                (test_id,),
-            )
-            test_row = cur.fetchone()
-            if test_row is None:
+            # Check test exists
+            cur.execute("SELECT id FROM test WHERE id = %s", (test_id,))
+            if cur.fetchone() is None:
                 return {"error": f"Test {test_id} not found"}
-
-            test_created_by = test_row[1]
-
-            # Authorization check:
-            # - Teachers can rename any test
-            # - Users can only rename tests they created
-            is_teacher = user_role == "teacher"
-            is_owner = test_created_by is not None and test_created_by == user_id
-
-            if not is_teacher and not is_owner:
-                return {"error": "You can only rename tests you created"}
 
             # Update title
             cur.execute(
