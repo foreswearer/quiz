@@ -106,6 +106,17 @@
         if (dashboardBtn) {
             dashboardBtn.classList.add("hidden");
         }
+        // Hide rename button and info
+        if (renameMyTestBtn) {
+            renameMyTestBtn.classList.add("hidden");
+        }
+        if (renameInfo) {
+            renameInfo.textContent = "";
+        }
+        // Hide max attempts container
+        if (maxAttemptsContainer) {
+            maxAttemptsContainer.classList.add("hidden");
+        }
     });
 
     // Dashboard button (teacher only)
@@ -126,8 +137,10 @@
     const studentInfo = document.getElementById("student-info");
     const testSelect = document.getElementById("test-select");
     const startSelectedBtn = document.getElementById("start-selected-test");
+    const testNameInput = document.getElementById("test-name");
     const numQuestionsInput = document.getElementById("num-questions");
     const maxAttemptsInput = document.getElementById("max-attempts");
+    const maxAttemptsContainer = document.getElementById("max-attempts-container");
     const createRandomBtn = document.getElementById("create-random-test");
     const randomInfo = document.getElementById("random-info");
     const attemptsEmpty = document.getElementById("attempts-empty");
@@ -137,6 +150,10 @@
 
     const viewPodiumBtn = document.getElementById("view-podium-btn");
     const podiumInfo = document.getElementById("podium-info");
+
+    // Rename button for all users (to rename their own tests)
+    const renameMyTestBtn = document.getElementById("rename-my-test-btn");
+    const renameInfo = document.getElementById("rename-info");
 
     const teacherPanel = document.getElementById("teacher-panel");
     const deleteTestBtn = document.getElementById("delete-test-btn");
@@ -245,11 +262,12 @@
                 : "-";
 
             row.innerHTML = `
+                <td>${submittedStr}</td>
                 <td>${a.test_title || "N/A"}</td>
                 <td>${a.attempt_number}</td>
                 <td>${score} / ${maxScore}</td>
                 <td>${percentage}%</td>
-                <td>${submittedStr}</td>
+                <td>${a.status || "-"}</td>
             `;
             attemptsTableBody.appendChild(row);
         });
@@ -349,6 +367,7 @@
         podiumInfo.textContent = "";
         deleteTestInfo.textContent = "";
         analyticsOutput.textContent = "";
+        if (renameInfo) renameInfo.textContent = "";
 
         const dni = dniInput.value.trim();
         dbg("Load dashboard button clicked, DNI=", dni);
@@ -365,8 +384,6 @@
             // Fetch tests
             const testsData = await fetchAvailableTests();
             let tests = testsData.tests || [];
-
-
 
             populateTestsSelect(tests);
 
@@ -392,6 +409,11 @@
             // Show dashboard
             dashboard.classList.remove("hidden");
 
+            // Show rename button for all logged-in users
+            if (renameMyTestBtn) {
+                renameMyTestBtn.classList.remove("hidden");
+            }
+
             // Infer role: if DNI matches known teacher pattern, show teacher panel
             // For demo: check if this is a teacher by attempting to fetch teacher dashboard
             try {
@@ -407,6 +429,10 @@
                         if (dashboardBtn) {
                             dashboardBtn.classList.remove("hidden");
                         }
+                        // Show max attempts container for teachers
+                        if (maxAttemptsContainer) {
+                            maxAttemptsContainer.classList.remove("hidden");
+                        }
                         studentInfo.textContent = `Welcome, ${teacherData.summary.teacher.name} (Teacher)`;
                     }
                 }
@@ -419,6 +445,10 @@
                 teacherPanel.classList.add("hidden");
                 if (dashboardBtn) {
                     dashboardBtn.classList.add("hidden");
+                }
+                // Hide max attempts container for students
+                if (maxAttemptsContainer) {
+                    maxAttemptsContainer.classList.add("hidden");
                 }
                 studentInfo.textContent = `Welcome, ${dni} (Student)`;
             }
@@ -451,9 +481,10 @@
     createRandomBtn.addEventListener("click", async function () {
         randomInfo.textContent = "";
         const numQuestions = parseInt(numQuestionsInput.value, 10);
+        const testName = testNameInput ? testNameInput.value.trim() : "";
         const maxAttempts = maxAttemptsInput ? parseInt(maxAttemptsInput.value, 10) : null;
         
-        dbg("Create random test clicked, numQuestions=", numQuestions, "maxAttempts=", maxAttempts);
+        dbg("Create random test clicked, numQuestions=", numQuestions, "testName=", testName, "maxAttempts=", maxAttempts);
         if (isNaN(numQuestions) || numQuestions < 1) {
             randomInfo.textContent = "Enter a valid number of questions (>=1).";
             return;
@@ -468,6 +499,10 @@
                 student_dni: currentDni,
                 num_questions: numQuestions,
             };
+            // Add title only if provided
+            if (testName) {
+                payload.title = testName;
+            }
             // Only include max_attempts if it's a valid positive number
             if (!isNaN(maxAttempts) && maxAttempts > 0) {
                 payload.max_attempts = maxAttempts;
@@ -533,6 +568,59 @@
         }
     });
 
+    // ---------- Rename test (for all users - can rename their own tests) ----------
+    if (renameMyTestBtn) {
+        renameMyTestBtn.addEventListener("click", async function () {
+            if (renameInfo) renameInfo.textContent = "";
+            
+            const testId = testSelect.value;
+            dbg("Rename my test clicked, testId=", testId);
+            
+            if (!testId) {
+                if (renameInfo) renameInfo.textContent = "Select a test first.";
+                return;
+            }
+            if (!currentDni) {
+                if (renameInfo) renameInfo.textContent = "Load your dashboard first.";
+                return;
+            }
+
+            const newTitle = prompt("Enter new name for this test:");
+            if (!newTitle || !newTitle.trim()) {
+                return; // Cancelled or empty
+            }
+
+            try {
+                const resp = await fetch(`/tests/${encodeURIComponent(testId)}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        title: newTitle.trim(),
+                        user_dni: currentDni
+                    }),
+                });
+                dbg("rename_test response status", resp.status);
+                if (!resp.ok) {
+                    const txt = await resp.text();
+                    if (renameInfo) renameInfo.textContent = "Error: " + txt;
+                    return;
+                }
+                const data = await resp.json();
+                if (data.error) {
+                    if (renameInfo) renameInfo.textContent = data.error;
+                    return;
+                }
+                if (renameInfo) renameInfo.textContent = data.message || "Test renamed!";
+
+                // Refresh tests list
+                loadDashboardBtn.click();
+            } catch (e) {
+                dbg("rename_test exception", e);
+                if (renameInfo) renameInfo.textContent = "Error: " + e;
+            }
+        });
+    }
+
     // Teacher: delete test
     deleteTestBtn.addEventListener("click", async function () {
         deleteTestInfo.textContent = "";
@@ -584,12 +672,12 @@
         }
     });
 
-    // Teacher: rename test
+    // Teacher: rename test (in teacher panel - can rename ANY test)
     renameTestBtn.addEventListener("click", async function () {
         deleteTestInfo.textContent = "";
-        dbg("Rename test button clicked, role=", currentRole);
+        dbg("Rename test button clicked (teacher panel), role=", currentRole);
         if (currentRole !== "teacher") {
-            deleteTestInfo.textContent = "Only teachers can rename tests.";
+            deleteTestInfo.textContent = "Only teachers can use this panel.";
             return;
         }
         const testId = testSelect.value;
@@ -744,11 +832,13 @@
         }
     });
 
-    // ---------- On load: read cookie (do NOT auto-load, just prefill) ----------
+    // ---------- On load: read cookie and auto-load dashboard ----------
     const cookieDni = getCookie("quiz_dni");
     if (cookieDni) {
-        dbg("Prefilling DNI from cookie:", cookieDni);
+        dbg("Found DNI cookie, auto-loading dashboard:", cookieDni);
         dniInput.value = cookieDni;
+        // Auto-trigger dashboard load
+        loadDashboardBtn.click();
     } else {
         dbg("No quiz_dni cookie found on load");
     }
