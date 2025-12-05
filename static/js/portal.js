@@ -395,8 +395,12 @@
             }
 
             const attempts = attemptsData.attempts || [];
-            renderAttemptsTable(attempts);
-            renderAttemptsChart(attempts);
+            
+            // Filter: only show graded attempts (not in_progress)
+            const gradedAttempts = attempts.filter(a => a.status === 'graded');
+            
+            renderAttemptsTable(gradedAttempts);
+            renderAttemptsChart(gradedAttempts);
 
             // Check role from first attempt (if any)
             currentRole = null;
