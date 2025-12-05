@@ -832,11 +832,13 @@
         }
     });
 
-    // ---------- On load: read cookie (do NOT auto-load, just prefill) ----------
+    // ---------- On load: read cookie and auto-load dashboard ----------
     const cookieDni = getCookie("quiz_dni");
     if (cookieDni) {
-        dbg("Prefilling DNI from cookie:", cookieDni);
+        dbg("Found DNI cookie, auto-loading dashboard:", cookieDni);
         dniInput.value = cookieDni;
+        // Auto-trigger dashboard load
+        loadDashboardBtn.click();
     } else {
         dbg("No quiz_dni cookie found on load");
     }
