@@ -89,6 +89,11 @@
         currentDni = null;
         currentRole = null;
         dashboard.classList.add("hidden");
+        // Show login card again
+        const loginCard = document.getElementById("login-card");
+        if (loginCard) {
+            loginCard.classList.remove("hidden");
+        }
         studentInfo.textContent = "";
         attemptsTableBody.innerHTML = "";
         if (attemptsChart) {
@@ -130,6 +135,7 @@
     }
 
     // ---------- DOM references ----------
+    const loginCard = document.getElementById("login-card");
     const dniInput = document.getElementById("student-dni");
     const loadDashboardBtn = document.getElementById("load-dashboard");
     const errorDiv = document.getElementById("error");
@@ -410,8 +416,11 @@
                 // Better: fetch user info from a /user/{dni} endpoint
             }
 
-            // Show dashboard
+            // Show dashboard, hide login card
             dashboard.classList.remove("hidden");
+            if (loginCard) {
+                loginCard.classList.add("hidden");
+            }
 
             // Show rename button for all logged-in users
             if (renameMyTestBtn) {
