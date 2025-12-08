@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, Optional
 
 from fastapi import APIRouter, Query
 
@@ -20,14 +20,22 @@ def list_courses():
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, code, name
+                SELECT id, code, name, description, academic_year, class_group, is_active
                 FROM course
                 ORDER BY id
                 """
             )
             rows = cur.fetchall()
             courses = [
-                {"id": r[0], "code": r[1], "name": r[2]}
+                {
+                    "id": r[0],
+                    "code": r[1],
+                    "name": r[2],
+                    "description": r[3],
+                    "academic_year": r[4],
+                    "class_group": r[5],
+                    "is_active": r[6],
+                }
                 for r in rows
             ]
             return {"courses": courses}
@@ -40,11 +48,18 @@ def create_course(data: dict):
     """Create a new course."""
     code = data.get("code", "").strip()
     name = data.get("name", "").strip()
+    description = data.get("description", "").strip() or None
+    academic_year = data.get("academic_year")
+    class_group = data.get("class_group", "").strip()
 
     if not code:
         return {"error": "Course code is required"}
     if not name:
         return {"error": "Course name is required"}
+    if not academic_year:
+        return {"error": "Academic year is required"}
+    if not class_group:
+        return {"error": "Class group is required"}
 
     conn = get_connection()
     try:
@@ -56,18 +71,25 @@ def create_course(data: dict):
 
             cur.execute(
                 """
-                INSERT INTO course (code, name)
-                VALUES (%s, %s)
+                INSERT INTO course (code, name, description, academic_year, class_group)
+                VALUES (%s, %s, %s, %s, %s)
                 RETURNING id
                 """,
-                (code, name),
+                (code, name, description, academic_year, class_group),
             )
             course_id = cur.fetchone()[0]
             conn.commit()
 
             return {
                 "message": "Course created",
-                "course": {"id": course_id, "code": code, "name": name},
+                "course": {
+                    "id": course_id,
+                    "code": code,
+                    "name": name,
+                    "description": description,
+                    "academic_year": academic_year,
+                    "class_group": class_group,
+                },
             }
     finally:
         conn.close()
@@ -78,11 +100,18 @@ def update_course(course_id: int, data: dict):
     """Update a course."""
     code = data.get("code", "").strip()
     name = data.get("name", "").strip()
+    description = data.get("description", "").strip() or None
+    academic_year = data.get("academic_year")
+    class_group = data.get("class_group", "").strip()
 
     if not code:
         return {"error": "Course code is required"}
     if not name:
         return {"error": "Course name is required"}
+    if not academic_year:
+        return {"error": "Academic year is required"}
+    if not class_group:
+        return {"error": "Class group is required"}
 
     conn = get_connection()
     try:
@@ -103,16 +132,24 @@ def update_course(course_id: int, data: dict):
             cur.execute(
                 """
                 UPDATE course
-                SET code = %s, name = %s
+                SET code = %s, name = %s, description = %s, 
+                    academic_year = %s, class_group = %s
                 WHERE id = %s
                 """,
-                (code, name, course_id),
+                (code, name, description, academic_year, class_group, course_id),
             )
             conn.commit()
 
             return {
                 "message": "Course updated",
-                "course": {"id": course_id, "code": code, "name": name},
+                "course": {
+                    "id": course_id,
+                    "code": code,
+                    "name": name,
+                    "description": description,
+                    "academic_year": academic_year,
+                    "class_group": class_group,
+                },
             }
     finally:
         conn.close()
@@ -160,6 +197,61 @@ def delete_course(course_id: int):
 # -------------------------------------------------------------------------
 
 
+def _fetch_question_with_options(cur, question_id: int) -> Optional[Dict[str, Any]]:
+    """Helper to fetch a question with its options."""
+    cur.execute(
+        """
+        SELECT
+            qb.id,
+            qb.course_id,
+            c.code AS course_code,
+            c.name AS course_name,
+            qb.question_text,
+            qb.question_type,
+            qb.default_points
+        FROM question_bank qb
+        JOIN course c ON c.id = qb.course_id
+        WHERE qb.id = %s
+        """,
+        (question_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+
+    # Get options
+    cur.execute(
+        """
+        SELECT id, option_text, is_correct, order_index
+        FROM question_option
+        WHERE question_id = %s
+        ORDER BY order_index
+        """,
+        (question_id,),
+    )
+    opt_rows = cur.fetchall()
+    options = [
+        {
+            "id": o[0],
+            "text": o[1],
+            "is_correct": bool(o[2]),
+            "order_index": o[3],
+        }
+        for o in opt_rows
+    ]
+
+    return {
+        "id": row[0],
+        "course_id": row[1],
+        "course_code": row[2],
+        "course_name": row[3],
+        "question_text": row[4],
+        "question_type": row[5],
+        "default_points": float(row[6]) if row[6] else None,
+        "options": options,
+    }
+
+
 @router.get("/api/question-bank")
 def list_questions(
     course_id: Optional[int] = Query(None, description="Filter by course ID"),
@@ -171,16 +263,8 @@ def list_questions(
             if course_id:
                 cur.execute(
                     """
-                    SELECT
-                        qb.id,
-                        qb.course_id,
-                        c.code AS course_code,
-                        c.name AS course_name,
-                        qb.question_text,
-                        qb.question_type,
-                        qb.default_points
+                    SELECT qb.id
                     FROM question_bank qb
-                    JOIN course c ON c.id = qb.course_id
                     WHERE qb.course_id = %s
                     ORDER BY qb.id
                     """,
@@ -189,59 +273,18 @@ def list_questions(
             else:
                 cur.execute(
                     """
-                    SELECT
-                        qb.id,
-                        qb.course_id,
-                        c.code AS course_code,
-                        c.name AS course_name,
-                        qb.question_text,
-                        qb.question_type,
-                        qb.default_points
+                    SELECT qb.id
                     FROM question_bank qb
-                    JOIN course c ON c.id = qb.course_id
                     ORDER BY qb.id
                     """
                 )
 
-            rows = cur.fetchall()
-            questions: List[Dict[str, Any]] = []
-
-            for row in rows:
-                q_id = row[0]
-
-                # Get options for this question
-                cur.execute(
-                    """
-                    SELECT id, option_text, is_correct, order_index
-                    FROM question_option
-                    WHERE question_id = %s
-                    ORDER BY order_index
-                    """,
-                    (q_id,),
-                )
-                opt_rows = cur.fetchall()
-                options = [
-                    {
-                        "id": o[0],
-                        "text": o[1],
-                        "is_correct": bool(o[2]),
-                        "order_index": o[3],
-                    }
-                    for o in opt_rows
-                ]
-
-                questions.append(
-                    {
-                        "id": q_id,
-                        "course_id": row[1],
-                        "course_code": row[2],
-                        "course_name": row[3],
-                        "question_text": row[4],
-                        "question_type": row[5],
-                        "default_points": float(row[6]) if row[6] else None,
-                        "options": options,
-                    }
-                )
+            q_ids = [r[0] for r in cur.fetchall()]
+            questions = []
+            for q_id in q_ids:
+                q = _fetch_question_with_options(cur, q_id)
+                if q:
+                    questions.append(q)
 
             return {"questions": questions}
     finally:
@@ -254,59 +297,11 @@ def get_question(question_id: int):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT
-                    qb.id,
-                    qb.course_id,
-                    c.code AS course_code,
-                    c.name AS course_name,
-                    qb.question_text,
-                    qb.question_type,
-                    qb.default_points
-                FROM question_bank qb
-                JOIN course c ON c.id = qb.course_id
-                WHERE qb.id = %s
-                """,
-                (question_id,),
-            )
-            row = cur.fetchone()
-            if not row:
+            question = _fetch_question_with_options(cur, question_id)
+            if not question:
                 return {"error": f"Question {question_id} not found"}
 
-            # Get options
-            cur.execute(
-                """
-                SELECT id, option_text, is_correct, order_index
-                FROM question_option
-                WHERE question_id = %s
-                ORDER BY order_index
-                """,
-                (question_id,),
-            )
-            opt_rows = cur.fetchall()
-            options = [
-                {
-                    "id": o[0],
-                    "text": o[1],
-                    "is_correct": bool(o[2]),
-                    "order_index": o[3],
-                }
-                for o in opt_rows
-            ]
-
-            return {
-                "question": {
-                    "id": row[0],
-                    "course_id": row[1],
-                    "course_code": row[2],
-                    "course_name": row[3],
-                    "question_text": row[4],
-                    "question_type": row[5],
-                    "default_points": float(row[6]) if row[6] else None,
-                    "options": options,
-                },
-            }
+            return {"question": question}
     finally:
         conn.close()
 
