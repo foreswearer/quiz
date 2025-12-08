@@ -1462,3 +1462,507 @@ def teacher_dashboard_overview(
             }
     finally:
         conn.close()
+
+
+# -------------------------------------------------------------------------
+# Question Bank Management endpoints
+# -------------------------------------------------------------------------
+
+
+@router.get("/courses")
+def list_courses():
+    """
+    List all courses.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, code, name
+                FROM course
+                ORDER BY code
+                """
+            )
+            rows = cur.fetchall()
+            courses = []
+            for cid, code, name in rows:
+                courses.append(
+                    {
+                        "id": cid,
+                        "code": code,
+                        "name": name,
+                    }
+                )
+            return {"courses": courses}
+    finally:
+        conn.close()
+
+
+@router.post("/courses")
+def create_course(data: dict):
+    """
+    Create a new course.
+    Requires teacher_dni for authorization.
+    """
+    code = data.get("code", "").strip()
+    name = data.get("name", "").strip()
+    teacher_dni = data.get("teacher_dni")
+
+    if not code:
+        return {"error": "Course code is required"}
+    if not name:
+        return {"error": "Course name is required"}
+    if not teacher_dni:
+        return {"error": "Teacher DNI is required"}
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # Verify teacher
+            cur.execute(
+                "SELECT id, role FROM app_user WHERE dni = %s",
+                (teacher_dni,),
+            )
+            user_row = cur.fetchone()
+            if user_row is None:
+                return {"error": f"User with DNI {teacher_dni} not found"}
+            if user_row[1] != "teacher":
+                return {"error": "Only teachers can create courses"}
+
+            # Check if code already exists
+            cur.execute("SELECT id FROM course WHERE code = %s", (code,))
+            if cur.fetchone():
+                return {"error": f"Course with code '{code}' already exists"}
+
+            # Insert course
+            cur.execute(
+                """
+                INSERT INTO course (code, name)
+                VALUES (%s, %s)
+                RETURNING id
+                """,
+                (code, name),
+            )
+            course_id = cur.fetchone()[0]
+            conn.commit()
+
+            return {
+                "message": "Course created successfully",
+                "course": {
+                    "id": course_id,
+                    "code": code,
+                    "name": name,
+                },
+            }
+    finally:
+        conn.close()
+
+
+@router.get("/api/question-bank")
+def list_questions(
+    course_id: Optional[int] = Query(None, description="Filter by course ID"),
+    teacher_dni: str = Query(..., description="Teacher DNI for authorization"),
+):
+    """
+    List all questions, optionally filtered by course.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # Verify teacher
+            cur.execute(
+                "SELECT id, role FROM app_user WHERE dni = %s",
+                (teacher_dni,),
+            )
+            user_row = cur.fetchone()
+            if user_row is None:
+                return {"error": f"User with DNI {teacher_dni} not found"}
+            if user_row[1] != "teacher":
+                return {"error": "Only teachers can access the question bank"}
+
+            # Build query
+            if course_id:
+                cur.execute(
+                    """
+                    SELECT qb.id, qb.course_id, c.code, c.name, qb.question_text, qb.question_type, qb.default_points
+                    FROM question_bank qb
+                    JOIN course c ON c.id = qb.course_id
+                    WHERE qb.course_id = %s
+                    ORDER BY qb.id
+                    """,
+                    (course_id,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT qb.id, qb.course_id, c.code, c.name, qb.question_text, qb.question_type, qb.default_points
+                    FROM question_bank qb
+                    JOIN course c ON c.id = qb.course_id
+                    ORDER BY qb.id
+                    """
+                )
+
+            rows = cur.fetchall()
+            questions = []
+            for qid, cid, ccode, cname, qtext, qtype, points in rows:
+                questions.append(
+                    {
+                        "id": qid,
+                        "course_id": cid,
+                        "course_code": ccode,
+                        "course_name": cname,
+                        "question_text": qtext,
+                        "question_type": qtype,
+                        "default_points": float(points) if points else None,
+                    }
+                )
+
+            return {"questions": questions}
+    finally:
+        conn.close()
+
+
+@router.get("/api/question-bank/{question_id}")
+def get_question(
+    question_id: int,
+    teacher_dni: str = Query(..., description="Teacher DNI for authorization"),
+):
+    """
+    Get a single question with its options.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # Verify teacher
+            cur.execute(
+                "SELECT id, role FROM app_user WHERE dni = %s",
+                (teacher_dni,),
+            )
+            user_row = cur.fetchone()
+            if user_row is None:
+                return {"error": f"User with DNI {teacher_dni} not found"}
+            if user_row[1] != "teacher":
+                return {"error": "Only teachers can access the question bank"}
+
+            # Get question
+            cur.execute(
+                """
+                SELECT qb.id, qb.course_id, c.code, c.name, qb.question_text, qb.question_type, qb.default_points
+                FROM question_bank qb
+                JOIN course c ON c.id = qb.course_id
+                WHERE qb.id = %s
+                """,
+                (question_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return {"error": f"Question {question_id} not found"}
+
+            qid, cid, ccode, cname, qtext, qtype, points = row
+
+            # Get options
+            cur.execute(
+                """
+                SELECT id, option_text, is_correct, order_index
+                FROM question_option
+                WHERE question_id = %s
+                ORDER BY order_index
+                """,
+                (question_id,),
+            )
+            option_rows = cur.fetchall()
+            options = []
+            for oid, otext, is_correct, order_idx in option_rows:
+                options.append(
+                    {
+                        "id": oid,
+                        "option_text": otext,
+                        "is_correct": bool(is_correct),
+                        "order_index": order_idx,
+                    }
+                )
+
+            return {
+                "question": {
+                    "id": qid,
+                    "course_id": cid,
+                    "course_code": ccode,
+                    "course_name": cname,
+                    "question_text": qtext,
+                    "question_type": qtype,
+                    "default_points": float(points) if points else None,
+                    "options": options,
+                },
+            }
+    finally:
+        conn.close()
+
+
+@router.post("/api/question-bank")
+def create_question(data: dict):
+    """
+    Create a new question with options.
+    Expected data:
+    {
+        "teacher_dni": "...",
+        "course_id": 1,
+        "question_text": "...",
+        "options": [
+            {"text": "Option A", "is_correct": true},
+            {"text": "Option B", "is_correct": false},
+            {"text": "Option C", "is_correct": false},
+            {"text": "Option D", "is_correct": false}
+        ]
+    }
+    """
+    teacher_dni = data.get("teacher_dni")
+    course_id = data.get("course_id")
+    question_text = data.get("question_text", "").strip()
+    options = data.get("options", [])
+
+    if not teacher_dni:
+        return {"error": "Teacher DNI is required"}
+    if not course_id:
+        return {"error": "Course ID is required"}
+    if not question_text:
+        return {"error": "Question text is required"}
+    if len(options) != 4:
+        return {"error": "Exactly 4 options are required"}
+
+    # Validate exactly one correct answer
+    correct_count = sum(1 for opt in options if opt.get("is_correct"))
+    if correct_count != 1:
+        return {"error": "Exactly one option must be marked as correct"}
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # Verify teacher
+            cur.execute(
+                "SELECT id, role FROM app_user WHERE dni = %s",
+                (teacher_dni,),
+            )
+            user_row = cur.fetchone()
+            if user_row is None:
+                return {"error": f"User with DNI {teacher_dni} not found"}
+            if user_row[1] != "teacher":
+                return {"error": "Only teachers can create questions"}
+
+            # Verify course exists
+            cur.execute("SELECT id FROM course WHERE id = %s", (course_id,))
+            if not cur.fetchone():
+                return {"error": f"Course {course_id} not found"}
+
+            # Insert question
+            cur.execute(
+                """
+                INSERT INTO question_bank (course_id, question_text, question_type, default_points)
+                VALUES (%s, %s, 'single_choice', 0.5)
+                RETURNING id
+                """,
+                (course_id, question_text),
+            )
+            question_id = cur.fetchone()[0]
+
+            # Insert options
+            for idx, opt in enumerate(options):
+                cur.execute(
+                    """
+                    INSERT INTO question_option (question_id, option_text, is_correct, order_index)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (
+                        question_id,
+                        opt.get("text", "").strip(),
+                        opt.get("is_correct", False),
+                        idx,
+                    ),
+                )
+
+            conn.commit()
+
+            return {
+                "message": "Question created successfully",
+                "question_id": question_id,
+            }
+    finally:
+        conn.close()
+
+
+@router.put("/api/question-bank/{question_id}")
+def update_question(question_id: int, data: dict):
+    """
+    Update an existing question and its options.
+    """
+    teacher_dni = data.get("teacher_dni")
+    question_text = data.get("question_text", "").strip()
+    options = data.get("options", [])
+
+    if not teacher_dni:
+        return {"error": "Teacher DNI is required"}
+    if not question_text:
+        return {"error": "Question text is required"}
+    if len(options) != 4:
+        return {"error": "Exactly 4 options are required"}
+
+    # Validate exactly one correct answer
+    correct_count = sum(1 for opt in options if opt.get("is_correct"))
+    if correct_count != 1:
+        return {"error": "Exactly one option must be marked as correct"}
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # Verify teacher
+            cur.execute(
+                "SELECT id, role FROM app_user WHERE dni = %s",
+                (teacher_dni,),
+            )
+            user_row = cur.fetchone()
+            if user_row is None:
+                return {"error": f"User with DNI {teacher_dni} not found"}
+            if user_row[1] != "teacher":
+                return {"error": "Only teachers can update questions"}
+
+            # Verify question exists
+            cur.execute("SELECT id FROM question_bank WHERE id = %s", (question_id,))
+            if not cur.fetchone():
+                return {"error": f"Question {question_id} not found"}
+
+            # Update question text
+            cur.execute(
+                """
+                UPDATE question_bank
+                SET question_text = %s
+                WHERE id = %s
+                """,
+                (question_text, question_id),
+            )
+
+            # Delete existing options and insert new ones
+            cur.execute(
+                "DELETE FROM question_option WHERE question_id = %s", (question_id,)
+            )
+
+            for idx, opt in enumerate(options):
+                cur.execute(
+                    """
+                    INSERT INTO question_option (question_id, option_text, is_correct, order_index)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (
+                        question_id,
+                        opt.get("text", "").strip(),
+                        opt.get("is_correct", False),
+                        idx,
+                    ),
+                )
+
+            conn.commit()
+
+            return {"message": "Question updated successfully"}
+    finally:
+        conn.close()
+
+
+@router.delete("/api/question-bank/{question_id}")
+def delete_question(
+    question_id: int,
+    teacher_dni: str = Query(..., description="Teacher DNI for authorization"),
+    cascade: bool = Query(False, description="If true, delete from tests too"),
+):
+    """
+    Delete a question from the question bank.
+    If cascade=false and question is used in tests, returns error.
+    If cascade=true, removes question from tests first.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # Verify teacher
+            cur.execute(
+                "SELECT id, role FROM app_user WHERE dni = %s",
+                (teacher_dni,),
+            )
+            user_row = cur.fetchone()
+            if user_row is None:
+                return {"error": f"User with DNI {teacher_dni} not found"}
+            if user_row[1] != "teacher":
+                return {"error": "Only teachers can delete questions"}
+
+            # Verify question exists
+            cur.execute("SELECT id FROM question_bank WHERE id = %s", (question_id,))
+            if not cur.fetchone():
+                return {"error": f"Question {question_id} not found"}
+
+            # Check if question is used in tests
+            cur.execute(
+                """
+                SELECT COUNT(*), array_agg(DISTINCT t.title)
+                FROM test_question tq
+                JOIN test t ON t.id = tq.test_id
+                WHERE tq.question_id = %s
+                """,
+                (question_id,),
+            )
+            usage_row = cur.fetchone()
+            usage_count = usage_row[0] or 0
+            test_titles = usage_row[1] or []
+
+            if usage_count > 0 and not cascade:
+                return {
+                    "error": "Question is used in tests",
+                    "used_in_tests": test_titles,
+                    "usage_count": usage_count,
+                    "hint": "Set cascade=true to delete anyway",
+                }
+
+            # Delete student answers referencing this question
+            cur.execute(
+                """
+                DELETE FROM student_answer
+                WHERE question_id = %s
+                """,
+                (question_id,),
+            )
+            deleted_answers = cur.rowcount
+
+            # Delete from test_question
+            cur.execute(
+                """
+                DELETE FROM test_question
+                WHERE question_id = %s
+                """,
+                (question_id,),
+            )
+            deleted_from_tests = cur.rowcount
+
+            # Delete options
+            cur.execute(
+                """
+                DELETE FROM question_option
+                WHERE question_id = %s
+                """,
+                (question_id,),
+            )
+
+            # Delete question
+            cur.execute(
+                """
+                DELETE FROM question_bank
+                WHERE id = %s
+                """,
+                (question_id,),
+            )
+
+            conn.commit()
+
+            return {
+                "message": "Question deleted successfully",
+                "deleted_question_id": question_id,
+                "deleted_from_tests": deleted_from_tests,
+                "deleted_answers": deleted_answers,
+            }
+    finally:
+        conn.close()

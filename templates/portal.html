@@ -28,8 +28,8 @@
         <!-- Identification Card -->
         <div id="login-card" class="card">
             <h2>🔐 Identify Yourself</h2>
-            <label for="student-dni">Enter your DNI (Only the number):</label>
-            <input type="text" id="student-dni" placeholder="e.g. 12345678" maxlength="20">
+            <label for="student-dni">Enter your DNI:</label>
+            <input type="text" id="student-dni" placeholder="e.g. 12345678A" maxlength="20">
             <button type="button" id="load-dashboard">Load My Dashboard</button>
             <div id="error" class="hidden"></div>
         </div>
@@ -119,6 +119,7 @@
                 </p>
                 
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+                    <button type="button" id="btn-question-bank">📚 Manage Questions</button>
                     <button type="button" id="delete-test-btn">🗑️ Delete Test</button>
                     <button type="button" id="rename-test-btn">✏️ Rename Test</button>
                     <button type="button" id="load-analytics-btn">📊 Show Analytics</button>

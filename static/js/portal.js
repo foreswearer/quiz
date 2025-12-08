@@ -167,6 +167,7 @@
     const deleteTestInfo = document.getElementById("delete-test-info");
     const loadAnalyticsBtn = document.getElementById("load-analytics-btn");
     const analyticsOutput = document.getElementById("analytics-output");
+    const btnQuestionBank = document.getElementById("btn-question-bank");
 
     let currentDni = null;
     let currentRole = null;
@@ -631,6 +632,14 @@
                 dbg("rename_test exception", e);
                 if (renameInfo) renameInfo.textContent = "Error: " + e;
             }
+        });
+    }
+
+    // Teacher: open question bank
+    if (btnQuestionBank) {
+        btnQuestionBank.addEventListener("click", function () {
+            dbg("Question bank button clicked");
+            window.location.href = "/question-bank";
         });
     }
 
