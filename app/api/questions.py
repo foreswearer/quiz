@@ -1,10 +1,99 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 
 from fastapi import APIRouter, Query
 
 from ..db import get_connection
 
 router = APIRouter()
+
+
+# -------------------------------------------------------------------------
+# Helper functions
+# -------------------------------------------------------------------------
+
+
+def _extract_course_data(data: dict) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Extract and validate course data from request.
+    Returns (course_data, error_message).
+    If error_message is not None, course_data will be None.
+    """
+    code = data.get("code", "").strip()
+    name = data.get("name", "").strip()
+    description = data.get("description", "").strip() or None
+    academic_year = data.get("academic_year")
+    class_group = data.get("class_group", "").strip()
+
+    if not code:
+        return None, "Course code is required"
+    if not name:
+        return None, "Course name is required"
+    if not academic_year:
+        return None, "Academic year is required"
+    if not class_group:
+        return None, "Class group is required"
+
+    return {
+        "code": code,
+        "name": name,
+        "description": description,
+        "academic_year": academic_year,
+        "class_group": class_group,
+    }, None
+
+
+def _fetch_question_with_options(cur, question_id: int) -> Optional[Dict[str, Any]]:
+    """Helper to fetch a question with its options."""
+    cur.execute(
+        """
+        SELECT
+            qb.id,
+            qb.course_id,
+            c.code AS course_code,
+            c.name AS course_name,
+            qb.question_text,
+            qb.question_type,
+            qb.default_points
+        FROM question_bank qb
+        JOIN course c ON c.id = qb.course_id
+        WHERE qb.id = %s
+        """,
+        (question_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+
+    cur.execute(
+        """
+        SELECT id, option_text, is_correct, order_index
+        FROM question_option
+        WHERE question_id = %s
+        ORDER BY order_index
+        """,
+        (question_id,),
+    )
+    opt_rows = cur.fetchall()
+    options = [
+        {
+            "id": o[0],
+            "text": o[1],
+            "is_correct": bool(o[2]),
+            "order_index": o[3],
+        }
+        for o in opt_rows
+    ]
+
+    return {
+        "id": row[0],
+        "course_id": row[1],
+        "course_code": row[2],
+        "course_name": row[3],
+        "question_text": row[4],
+        "question_type": row[5],
+        "default_points": float(row[6]) if row[6] else None,
+        "options": options,
+    }
 
 
 # -------------------------------------------------------------------------
@@ -46,28 +135,19 @@ def list_courses():
 @router.post("/courses")
 def create_course(data: dict):
     """Create a new course."""
-    code = data.get("code", "").strip()
-    name = data.get("name", "").strip()
-    description = data.get("description", "").strip() or None
-    academic_year = data.get("academic_year")
-    class_group = data.get("class_group", "").strip()
-
-    if not code:
-        return {"error": "Course code is required"}
-    if not name:
-        return {"error": "Course name is required"}
-    if not academic_year:
-        return {"error": "Academic year is required"}
-    if not class_group:
-        return {"error": "Class group is required"}
+    course_data, error = _extract_course_data(data)
+    if error:
+        return {"error": error}
 
     conn = get_connection()
     try:
         with conn.cursor() as cur:
             # Check if code already exists
-            cur.execute("SELECT id FROM course WHERE code = %s", (code,))
+            cur.execute("SELECT id FROM course WHERE code = %s", (course_data["code"],))
             if cur.fetchone():
-                return {"error": f"Course with code '{code}' already exists"}
+                return {
+                    "error": f"Course with code '{course_data['code']}' already exists"
+                }
 
             cur.execute(
                 """
@@ -75,21 +155,20 @@ def create_course(data: dict):
                 VALUES (%s, %s, %s, %s, %s)
                 RETURNING id
                 """,
-                (code, name, description, academic_year, class_group),
+                (
+                    course_data["code"],
+                    course_data["name"],
+                    course_data["description"],
+                    course_data["academic_year"],
+                    course_data["class_group"],
+                ),
             )
             course_id = cur.fetchone()[0]
             conn.commit()
 
             return {
                 "message": "Course created",
-                "course": {
-                    "id": course_id,
-                    "code": code,
-                    "name": name,
-                    "description": description,
-                    "academic_year": academic_year,
-                    "class_group": class_group,
-                },
+                "course": {"id": course_id, **course_data},
             }
     finally:
         conn.close()
@@ -98,20 +177,9 @@ def create_course(data: dict):
 @router.put("/courses/{course_id}")
 def update_course(course_id: int, data: dict):
     """Update a course."""
-    code = data.get("code", "").strip()
-    name = data.get("name", "").strip()
-    description = data.get("description", "").strip() or None
-    academic_year = data.get("academic_year")
-    class_group = data.get("class_group", "").strip()
-
-    if not code:
-        return {"error": "Course code is required"}
-    if not name:
-        return {"error": "Course name is required"}
-    if not academic_year:
-        return {"error": "Academic year is required"}
-    if not class_group:
-        return {"error": "Class group is required"}
+    course_data, error = _extract_course_data(data)
+    if error:
+        return {"error": error}
 
     conn = get_connection()
     try:
@@ -124,10 +192,12 @@ def update_course(course_id: int, data: dict):
             # Check code uniqueness (excluding current course)
             cur.execute(
                 "SELECT id FROM course WHERE code = %s AND id != %s",
-                (code, course_id),
+                (course_data["code"], course_id),
             )
             if cur.fetchone():
-                return {"error": f"Course with code '{code}' already exists"}
+                return {
+                    "error": f"Course with code '{course_data['code']}' already exists"
+                }
 
             cur.execute(
                 """
@@ -136,20 +206,20 @@ def update_course(course_id: int, data: dict):
                     academic_year = %s, class_group = %s
                 WHERE id = %s
                 """,
-                (code, name, description, academic_year, class_group, course_id),
+                (
+                    course_data["code"],
+                    course_data["name"],
+                    course_data["description"],
+                    course_data["academic_year"],
+                    course_data["class_group"],
+                    course_id,
+                ),
             )
             conn.commit()
 
             return {
                 "message": "Course updated",
-                "course": {
-                    "id": course_id,
-                    "code": code,
-                    "name": name,
-                    "description": description,
-                    "academic_year": academic_year,
-                    "class_group": class_group,
-                },
+                "course": {"id": course_id, **course_data},
             }
     finally:
         conn.close()
@@ -195,61 +265,6 @@ def delete_course(course_id: int):
 # -------------------------------------------------------------------------
 # Question Bank endpoints (prefixed with /api to avoid route conflicts)
 # -------------------------------------------------------------------------
-
-
-def _fetch_question_with_options(cur, question_id: int) -> Optional[Dict[str, Any]]:
-    """Helper to fetch a question with its options."""
-    cur.execute(
-        """
-        SELECT
-            qb.id,
-            qb.course_id,
-            c.code AS course_code,
-            c.name AS course_name,
-            qb.question_text,
-            qb.question_type,
-            qb.default_points
-        FROM question_bank qb
-        JOIN course c ON c.id = qb.course_id
-        WHERE qb.id = %s
-        """,
-        (question_id,),
-    )
-    row = cur.fetchone()
-    if not row:
-        return None
-
-    # Get options
-    cur.execute(
-        """
-        SELECT id, option_text, is_correct, order_index
-        FROM question_option
-        WHERE question_id = %s
-        ORDER BY order_index
-        """,
-        (question_id,),
-    )
-    opt_rows = cur.fetchall()
-    options = [
-        {
-            "id": o[0],
-            "text": o[1],
-            "is_correct": bool(o[2]),
-            "order_index": o[3],
-        }
-        for o in opt_rows
-    ]
-
-    return {
-        "id": row[0],
-        "course_id": row[1],
-        "course_code": row[2],
-        "course_name": row[3],
-        "question_text": row[4],
-        "question_type": row[5],
-        "default_points": float(row[6]) if row[6] else None,
-        "options": options,
-    }
 
 
 @router.get("/api/question-bank")
@@ -465,9 +480,7 @@ def delete_question(question_id: int):
             )
             count = cur.fetchone()[0]
             if count > 0:
-                return {
-                    "error": f"Cannot delete: question is used in {count} test(s)"
-                }
+                return {"error": f"Cannot delete: question is used in {count} test(s)"}
 
             # Delete options first (foreign key)
             cur.execute(

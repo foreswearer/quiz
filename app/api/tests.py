@@ -1,77 +1,65 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 from fastapi import APIRouter, Query
 
 from ..db import get_connection, get_test_info, get_user_by_dni
-from ..schemas import SubmitRequest
+from ..schemas import RandomTestRequest
 
 router = APIRouter()
 
 
-@router.post("/tests/{test_id}/start")
-def start_test(
-    test_id: int,
-    student_dni: str = Query(..., description="User DNI / ID (unique in app_user)"),
-):
+@router.get("/available_tests")
+def available_tests():
     """
-    Start a test attempt for the user identified by DNI.
-    Teachers can also start attempts (for self-testing).
+    List all tests with basic information and number of questions.
     """
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            # Any user (student or teacher) with that DNI
-            user = get_user_by_dni(cur, student_dni)
-            if user is None:
-                return {"error": f"user not found for DNI {student_dni}"}
+            cur.execute(
+                """
+                SELECT
+                    t.id,
+                    t.title,
+                    t.description,
+                    COALESCE(t.total_points, 0)::float AS total_points,
+                    COUNT(tq.question_id) AS num_questions
+                FROM test t
+                LEFT JOIN test_question tq ON tq.test_id = t.id
+                GROUP BY t.id, t.title, t.description, t.total_points
+                ORDER BY t.id
+                """
+            )
+            rows = cur.fetchall()
 
-            student_id = user["id"]
+            tests: List[Dict[str, Any]] = []
+            for tid, title, desc, total_points, num_questions in rows:
+                tests.append(
+                    {
+                        "id": tid,
+                        "title": title,
+                        "description": desc,
+                        "total_points": total_points,
+                        "num_questions": int(num_questions),
+                    }
+                )
+            return {"tests": tests}
+    finally:
+        conn.close()
 
+
+@router.get("/tests/{test_id}")
+def get_test(test_id: int):
+    """
+    Get a test definition, including questions and options (with is_correct flag).
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
             test = get_test_info(cur, test_id)
             if test is None:
                 return {"error": f"test {test_id} not found"}
 
-            # Next attempt number
-            cur.execute(
-                """
-                SELECT COALESCE(MAX(attempt_number), 0) + 1
-                FROM test_attempt
-                WHERE test_id = %s AND student_id = %s
-                """,
-                (test_id, student_id),
-            )
-            attempt_number = cur.fetchone()[0]
-
-            # Max score: 0.5 per question
-            cur.execute(
-                """
-                SELECT COUNT(*)
-                FROM test_question
-                WHERE test_id = %s
-                """,
-                (test_id,),
-            )
-            num_questions = cur.fetchone()[0] or 0
-            max_score = num_questions * 0.5
-
-            cur.execute(
-                """
-                INSERT INTO test_attempt (
-                    test_id,
-                    student_id,
-                    attempt_number,
-                    status,
-                    max_score,
-                    auto_graded
-                )
-                VALUES (%s, %s, %s, 'in_progress', %s, FALSE)
-                RETURNING id
-                """,
-                (test_id, student_id, attempt_number, max_score),
-            )
-            attempt_id = cur.fetchone()[0]
-
-            # Questions for this test (without is_correct flags)
             cur.execute(
                 """
                 SELECT
@@ -93,7 +81,7 @@ def start_test(
             for q_id, order_idx, q_text, q_type, q_points in question_rows:
                 cur.execute(
                     """
-                    SELECT id, option_text, order_index
+                    SELECT id, option_text, is_correct, order_index
                     FROM question_option
                     WHERE question_id = %s
                     ORDER BY order_index
@@ -101,10 +89,16 @@ def start_test(
                     (q_id,),
                 )
                 options_rows = cur.fetchall()
-                options: List[Dict[str, Any]] = [
-                    {"id": opt_id, "text": opt_text, "order_index": opt_order}
-                    for (opt_id, opt_text, opt_order) in options_rows
-                ]
+                options: List[Dict[str, Any]] = []
+                for opt_id, opt_text, is_correct, opt_order in options_rows:
+                    options.append(
+                        {
+                            "id": opt_id,
+                            "text": opt_text,
+                            "order_index": opt_order,
+                            "is_correct": bool(is_correct),
+                        }
+                    )
 
                 questions.append(
                     {
@@ -117,269 +111,195 @@ def start_test(
                     }
                 )
 
-            conn.commit()
-
             return {
-                "attempt_id": attempt_id,
-                "attempt_number": attempt_number,
-                "student": {
-                    "id": user["id"],
-                    "name": user["full_name"],
-                    "email": user["email"],
-                    "dni": user["dni"],
-                    "role": user["role"],
-                },
-                "test": {
-                    **test,
-                    "max_score": max_score,
-                },
+                "test": test,
                 "questions": questions,
             }
     finally:
         conn.close()
 
 
-@router.post("/attempts/{attempt_id}/submit")
-def submit_attempt(attempt_id: int, payload: SubmitRequest):
+@router.post("/tests/random_from_bank")
+def create_random_test(req: RandomTestRequest):
     """
-    Scoring:
-      - correct: +0.5
-      - incorrect: -1 / num_options
-      - unanswered: 0
-    Returns per-question details for UI highlighting.
+    Create a random test from the question bank for a given course.
     """
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            # Attempt info
+            cur.execute(
+                "SELECT id, name FROM course WHERE code = %s",
+                (req.course_code,),
+            )
+            crow = cur.fetchone()
+            if crow is None:
+                return {"error": f"course with code {req.course_code} not found"}
+            course_id, course_name = crow
+
+            n = max(1, req.num_questions)
+
+            title = f"Random {n} – created by {req.student_dni}"
+            description = (
+                f"Random {n}-question test from course "
+                f"{req.course_code} ({course_name})."
+            )
+
             cur.execute(
                 """
-                SELECT test_id, student_id, status, max_score
-                FROM test_attempt
+                INSERT INTO test (course_id, title, description, total_points)
+                VALUES (%s, %s, %s, NULL)
+                RETURNING id
+                """,
+                (course_id, title, description),
+            )
+            test_id = cur.fetchone()[0]
+
+            cur.execute(
+                """
+                WITH q AS (
+                    SELECT
+                        qb.id AS question_id,
+                        row_number() OVER (ORDER BY random()) AS rn
+                    FROM question_bank qb
+                    WHERE qb.course_id = %s
+                )
+                INSERT INTO test_question (test_id, question_id, order_index, points)
+                SELECT
+                    %s AS test_id,
+                    q.question_id,
+                    q.rn AS order_index,
+                    qb.default_points
+                FROM q
+                JOIN question_bank qb ON qb.id = q.question_id
+                WHERE q.rn <= %s
+                RETURNING question_id
+                """,
+                (course_id, test_id, n),
+            )
+            inserted_questions = cur.fetchall()
+            actual_n = len(inserted_questions)
+
+            cur.execute(
+                """
+                UPDATE test
+                SET total_points = %s
                 WHERE id = %s
                 """,
-                (attempt_id,),
-            )
-            row = cur.fetchone()
-            if row is None:
-                return {"error": f"attempt {attempt_id} not found"}
-
-            test_id, student_id, status, max_score = row
-            if status != "in_progress":
-                return {
-                    "error": f"attempt {attempt_id} is not in progress (status={status})"
-                }
-
-            # If no max_score yet, compute from number of questions
-            if max_score is None:
-                cur.execute(
-                    """
-                    SELECT COUNT(*)
-                    FROM test_question
-                    WHERE test_id = %s
-                    """,
-                    (test_id,),
-                )
-                num_questions = cur.fetchone()[0] or 0
-                max_score = num_questions * 0.5
-
-            # Map question_id -> selected_option_id
-            answers_by_q = {
-                a.question_id: a.selected_option_id for a in payload.answers
-            }
-
-            total_score = 0.0
-            details: List[Dict[str, Any]] = []
-
-            # All questions in this test
-            cur.execute(
-                """
-                SELECT question_id
-                FROM test_question
-                WHERE test_id = %s
-                """,
-                (test_id,),
-            )
-            q_ids = [r[0] for r in cur.fetchall()]
-
-            for question_id in q_ids:
-                selected_option_id: Optional[int] = answers_by_q.get(question_id)
-
-                cur.execute(
-                    """
-                    SELECT id, is_correct
-                    FROM question_option
-                    WHERE question_id = %s
-                    """,
-                    (question_id,),
-                )
-                opt_rows = cur.fetchall()
-                if not opt_rows:
-                    continue
-
-                num_options = len(opt_rows)
-                correct_option_ids = [oid for (oid, is_corr) in opt_rows if is_corr]
-
-                is_correct: Optional[bool] = None
-                if selected_option_id is not None:
-                    is_correct = any(
-                        (oid == selected_option_id and is_corr)
-                        for (oid, is_corr) in opt_rows
-                    )
-
-                # Scoring
-                if selected_option_id is None:
-                    earned = 0.0
-                elif is_correct:
-                    earned = 0.5
-                else:
-                    earned = -1.0 / float(num_options)
-
-                total_score += earned
-
-                # Persist answer
-                if selected_option_id is not None:
-                    cur.execute(
-                        """
-                        INSERT INTO student_answer (
-                            attempt_id, question_id,
-                            selected_option_id,
-                            is_correct, score
-                        )
-                        VALUES (%s, %s, %s, %s, %s)
-                        ON CONFLICT (attempt_id, question_id) DO UPDATE
-                        SET selected_option_id = EXCLUDED.selected_option_id,
-                            is_correct = EXCLUDED.is_correct,
-                            score = EXCLUDED.score,
-                            graded_at = NOW()
-                        """,
-                        (
-                            attempt_id,
-                            question_id,
-                            selected_option_id,
-                            is_correct,
-                            earned,
-                        ),
-                    )
-
-                details.append(
-                    {
-                        "question_id": question_id,
-                        "selected_option_id": selected_option_id,
-                        "correct_option_ids": correct_option_ids,
-                        "is_correct": is_correct,
-                        "score": earned,
-                    }
-                )
-
-            # Final percentage
-            percentage = 0.0
-            if max_score and float(max_score) > 0.0:
-                percentage = (total_score / float(max_score)) * 100.0
-
-            cur.execute(
-                """
-                UPDATE test_attempt
-                SET status = 'graded',
-                    submitted_at = NOW(),
-                    score = %s,
-                    percentage = %s,
-                    auto_graded = TRUE
-                WHERE id = %s
-                """,
-                (total_score, percentage, attempt_id),
+                (actual_n * 0.5, test_id),
             )
 
             conn.commit()
 
             return {
-                "attempt_id": attempt_id,
                 "test_id": test_id,
-                "student_id": student_id,
-                "score": total_score,
-                "max_score": float(max_score),
-                "percentage": percentage,
-                "details": details,
+                "title": title,
+                "description": description,
+                "num_questions": actual_n,
             }
     finally:
         conn.close()
 
 
-@router.get("/student/{dni}/attempts")
-def student_attempts(dni: str):
+@router.delete("/tests/{test_id}")
+def delete_test(
+    test_id: int,
+    teacher_dni: str = Query(..., description="Teacher DNI (must have role='teacher')"),
+):
     """
-    Attempts for a user identified by DNI.
-    Works for both students and teachers (role is returned).
+    Delete a test and ALL associated results.
+    Requires a teacher DNI.
     """
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            user = get_user_by_dni(cur, dni)
+            user = get_user_by_dni(cur, teacher_dni)
             if user is None:
-                return {"error": f"user with DNI {dni} not found"}
+                return {"error": f"user with DNI {teacher_dni} not found"}
+            if user["role"] != "teacher":
+                return {"error": f"DNI {teacher_dni} is not a teacher"}
+
+            test = get_test_info(cur, test_id)
+            if test is None:
+                return {"error": f"test {test_id} not found"}
+            test_title = test["title"]
+
+            cur.execute(
+                "SELECT COUNT(*) FROM test_attempt WHERE test_id = %s",
+                (test_id,),
+            )
+            attempts_count = cur.fetchone()[0] or 0
 
             cur.execute(
                 """
-                SELECT
-                    ta.id,
-                    ta.test_id,
-                    t.title,
-                    ta.attempt_number,
-                    ta.score,
-                    ta.max_score,
-                    ta.percentage,
-                    ta.status,
-                    ta.submitted_at
-                FROM test_attempt ta
-                JOIN test t ON t.id = ta.test_id
-                WHERE ta.student_id = %s
-                ORDER BY ta.submitted_at NULLS LAST, ta.id
+                SELECT COUNT(*) FROM student_answer
+                WHERE attempt_id IN (SELECT id FROM test_attempt WHERE test_id = %s)
                 """,
-                (user["id"],),
+                (test_id,),
             )
-            rows = cur.fetchall()
+            answers_count = cur.fetchone()[0] or 0
 
-            attempts: List[Dict[str, Any]] = []
-            for (
-                attempt_id,
-                test_id,
-                test_title,
-                attempt_number,
-                score,
-                max_score,
-                percentage,
-                status,
-                submitted_at,
-            ) in rows:
-                attempts.append(
-                    {
-                        "attempt_id": attempt_id,
-                        "test_id": test_id,
-                        "test_title": test_title,
-                        "attempt_number": attempt_number,
-                        "score": float(score) if score is not None else None,
-                        "max_score": float(max_score)
-                        if max_score is not None
-                        else None,
-                        "percentage": float(percentage)
-                        if percentage is not None
-                        else None,
-                        "status": status,
-                        "submitted_at": submitted_at.isoformat()
-                        if submitted_at is not None
-                        else None,
-                    }
-                )
+            cur.execute(
+                "SELECT COUNT(*) FROM test_question WHERE test_id = %s",
+                (test_id,),
+            )
+            tq_count = cur.fetchone()[0] or 0
+
+            cur.execute(
+                """
+                DELETE FROM student_answer
+                WHERE attempt_id IN (SELECT id FROM test_attempt WHERE test_id = %s)
+                """,
+                (test_id,),
+            )
+            cur.execute("DELETE FROM test_attempt WHERE test_id = %s", (test_id,))
+            cur.execute("DELETE FROM test_question WHERE test_id = %s", (test_id,))
+            cur.execute("DELETE FROM test WHERE id = %s", (test_id,))
+
+            conn.commit()
 
             return {
-                "student": {
-                    "id": user["id"],
-                    "dni": user["dni"],
-                    "name": user["full_name"],
-                    "email": user["email"],
-                    "role": user["role"],
-                },
-                "attempts": attempts,
+                "deleted_test_id": test_id,
+                "deleted_test_title": test_title,
+                "deleted_attempts": attempts_count,
+                "deleted_answers": answers_count,
+                "deleted_test_questions": tq_count,
             }
+    finally:
+        conn.close()
+
+
+@router.put("/tests/{test_id}")
+def rename_test(test_id: int, data: dict):
+    """
+    Rename a test. Only teachers can rename tests.
+    """
+    title = data.get("title")
+    teacher_dni = data.get("teacher_dni")
+
+    if not title or not title.strip():
+        return {"error": "Title cannot be empty"}
+    if not teacher_dni:
+        return {"error": "Teacher DNI required"}
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            user = get_user_by_dni(cur, teacher_dni)
+            if user is None:
+                return {"error": f"User with DNI {teacher_dni} not found"}
+            if user["role"] != "teacher":
+                return {"error": "Only teachers can rename tests"}
+
+            test = get_test_info(cur, test_id)
+            if test is None:
+                return {"error": f"Test {test_id} not found"}
+
+            cur.execute(
+                "UPDATE test SET title = %s WHERE id = %s",
+                (title.strip(), test_id),
+            )
+            conn.commit()
+
+            return {"message": f"Test renamed to '{title.strip()}'"}
     finally:
         conn.close()
