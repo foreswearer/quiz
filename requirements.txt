@@ -3,3 +3,4 @@ httpx
 pytest
 psycopg2
 uvicorn
+ruff
