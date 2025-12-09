@@ -350,7 +350,7 @@
             // Fill options
             q.options.forEach((opt, idx) => {
                 if (idx < 4) {
-                    optionInputs[idx].value = opt.option_text;
+                    optionInputs[idx].value = opt.text;
                     if (opt.is_correct) {
                         correctRadios[idx].checked = true;
                     }
