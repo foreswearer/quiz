@@ -430,26 +430,59 @@ def update_question(question_id: int, data: dict):
                 if not has_correct:
                     return {"error": "At least one option must be correct"}
 
-                # Delete old options
+                # Get existing options
                 cur.execute(
-                    "DELETE FROM question_option WHERE question_id = %s",
+                    """
+                    SELECT id, order_index 
+                    FROM question_option 
+                    WHERE question_id = %s 
+                    ORDER BY order_index
+                    """,
                     (question_id,),
                 )
+                existing_options = cur.fetchall()
+                existing_by_index = {row[1]: row[0] for row in existing_options}
 
-                # Insert new options
+                # Update or insert options
                 for idx, opt in enumerate(options):
-                    cur.execute(
-                        """
-                        INSERT INTO question_option (question_id, option_text, is_correct, order_index)
-                        VALUES (%s, %s, %s, %s)
-                        """,
-                        (
-                            question_id,
-                            opt.get("text", "").strip(),
-                            bool(opt.get("is_correct", False)),
-                            idx + 1,
-                        ),
-                    )
+                    order_index = idx + 1
+                    option_text = opt.get("text", "").strip()
+                    is_correct = bool(opt.get("is_correct", False))
+
+                    if order_index in existing_by_index:
+                        # Update existing option (preserves ID for student_answer FK)
+                        cur.execute(
+                            """
+                            UPDATE question_option
+                            SET option_text = %s, is_correct = %s
+                            WHERE id = %s
+                            """,
+                            (option_text, is_correct, existing_by_index[order_index]),
+                        )
+                    else:
+                        # Insert new option
+                        cur.execute(
+                            """
+                            INSERT INTO question_option 
+                            (question_id, option_text, is_correct, order_index)
+                            VALUES (%s, %s, %s, %s)
+                            """,
+                            (question_id, option_text, is_correct, order_index),
+                        )
+
+                # Delete extra options only if not referenced by student_answer
+                for order_index, option_id in existing_by_index.items():
+                    if order_index > len(options):
+                        cur.execute(
+                            "SELECT COUNT(*) FROM student_answer WHERE selected_option_id = %s",
+                            (option_id,),
+                        )
+                        if cur.fetchone()[0] == 0:
+                            cur.execute(
+                                "DELETE FROM question_option WHERE id = %s",
+                                (option_id,),
+                            )
+                        # If referenced, leave it (can't delete)
 
             conn.commit()
 
