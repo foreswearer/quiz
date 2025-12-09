@@ -22,3 +22,8 @@ def quiz_page():
 @router.get("/dashboard", include_in_schema=False)
 def dashboard_page():
     return FileResponse(os.path.join(TEMPLATES_DIR, "dashboard.html"))
+
+
+@router.get("/question-bank", include_in_schema=False)
+def question_bank_page():
+    return FileResponse(os.path.join(TEMPLATES_DIR, "question-bank.html"))

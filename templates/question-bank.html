@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Question Bank - Quiz Platform</title>
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/question-bank.css">
+</head>
+<body>
+    <div class="page">
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div>
+                <h1>📚 Question Bank</h1>
+                <p class="subtitle small">Manage questions for your quizzes</p>
+            </div>
+            <div class="toolbar-buttons">
+                <button id="btn-home" class="toolbar-btn">🏠 Portal</button>
+                <button id="btn-dashboard" class="toolbar-btn">📊 Dashboard</button>
+                <button id="theme-toggle" class="theme-toggle">🌙</button>
+            </div>
+        </div>
+
+        <!-- Error display -->
+        <div id="error" class="hidden"></div>
+
+        <!-- Access denied message (shown to non-teachers) -->
+        <div id="access-denied" class="card hidden">
+            <h2>🔒 Access Denied</h2>
+            <p>Only teachers can access the Question Bank.</p>
+            <p>Please <a href="/">return to the portal</a> and log in with a teacher account.</p>
+        </div>
+
+        <!-- Main content (shown to teachers) -->
+        <div id="main-content" class="hidden">
+            <!-- Course Selection -->
+            <div class="card">
+                <h2>📖 Course Selection</h2>
+                <div class="course-controls">
+                    <div class="course-select-wrapper">
+                        <label for="course-select">Select Course:</label>
+                        <select id="course-select">
+                            <option value="">-- Select a course --</option>
+                        </select>
+                    </div>
+                    <button id="btn-new-course" type="button">➕ New Course</button>
+                </div>
+
+                <!-- New Course Form (hidden by default) -->
+                <div id="new-course-form" class="hidden inline-form">
+                    <h3>Create New Course</h3>
+                    <div class="form-row">
+                        <label for="new-course-code">Code:</label>
+                        <input type="text" id="new-course-code" placeholder="e.g., 2526-45810-B" maxlength="50">
+                    </div>
+                    <div class="form-row">
+                        <label for="new-course-name">Name:</label>
+                        <input type="text" id="new-course-name" placeholder="e.g., Cloud Digital Leader 2025" maxlength="200">
+                    </div>
+                    <div class="form-actions">
+                        <button id="btn-save-course" type="button">💾 Save Course</button>
+                        <button id="btn-cancel-course" type="button" class="btn-secondary">Cancel</button>
+                    </div>
+                    <div id="course-form-error" class="form-error"></div>
+                </div>
+            </div>
+
+            <!-- Questions List -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>❓ Questions</h2>
+                    <button id="btn-add-question" type="button" disabled>➕ Add Question</button>
+                </div>
+                
+                <div id="questions-empty" class="empty-state">
+                    <p>Select a course to view its questions, or create a new course first.</p>
+                </div>
+
+                <div id="questions-loading" class="loading-state hidden">
+                    <p>Loading questions...</p>
+                </div>
+
+                <div id="questions-table-wrapper" class="table-container hidden">
+                    <table id="questions-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;">#</th>
+                                <th>Question Text</th>
+                                <th style="width: 120px;">Options</th>
+                                <th style="width: 150px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="questions-table-body">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div id="questions-pagination" class="pagination hidden"></div>
+            </div>
+
+            <!-- Question Editor (hidden by default) -->
+            <div id="question-editor" class="card hidden">
+                <h2 id="editor-title">➕ Add New Question</h2>
+                
+                <div class="form-row">
+                    <label for="question-text">Question Text:</label>
+                    <textarea id="question-text" rows="3" placeholder="Enter the question text..."></textarea>
+                </div>
+
+                <div class="options-section">
+                    <h3>Answer Options</h3>
+                    <p class="small">Select the radio button next to the correct answer.</p>
+                    
+                    <div class="option-row">
+                        <input type="radio" name="correct-option" value="0" id="correct-0">
+                        <label for="correct-0" class="option-letter">A</label>
+                        <input type="text" id="option-0" placeholder="Option A" class="option-input">
+                    </div>
+                    <div class="option-row">
+                        <input type="radio" name="correct-option" value="1" id="correct-1">
+                        <label for="correct-1" class="option-letter">B</label>
+                        <input type="text" id="option-1" placeholder="Option B" class="option-input">
+                    </div>
+                    <div class="option-row">
+                        <input type="radio" name="correct-option" value="2" id="correct-2">
+                        <label for="correct-2" class="option-letter">C</label>
+                        <input type="text" id="option-2" placeholder="Option C" class="option-input">
+                    </div>
+                    <div class="option-row">
+                        <input type="radio" name="correct-option" value="3" id="correct-3">
+                        <label for="correct-3" class="option-letter">D</label>
+                        <input type="text" id="option-3" placeholder="Option D" class="option-input">
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button id="btn-save-question" type="button">💾 Save Question</button>
+                    <button id="btn-cancel-question" type="button" class="btn-secondary">Cancel</button>
+                </div>
+                <div id="question-form-error" class="form-error"></div>
+            </div>
+        </div>
+
+        <!-- Delete Confirmation Modal -->
+        <div id="delete-modal" class="modal hidden">
+            <div class="modal-content">
+                <h3>⚠️ Delete Question</h3>
+                <p id="delete-modal-message">Are you sure you want to delete this question?</p>
+                <div id="delete-modal-warning" class="warning-box hidden">
+                    <p><strong>Warning:</strong> This question is used in the following tests:</p>
+                    <ul id="delete-modal-tests"></ul>
+                    <p>Deleting will remove it from these tests and delete all related student answers.</p>
+                </div>
+                <div class="modal-actions">
+                    <button id="btn-confirm-delete" type="button" class="btn-danger">🗑️ Delete</button>
+                    <button id="btn-cancel-delete" type="button" class="btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p id="version-text">Loading version...</p>
+            <p class="disclaimer">This quiz platform is for educational purposes. Results are not official certifications.</p>
+        </footer>
+    </div>
+
+    <script src="/static/js/question-bank.js"></script>
+</body>
+</html>
