@@ -1,0 +1,21 @@
+name: Upload Questions (Production)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  upload:
+    name: Upload PPTX Questions to Production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Upload Questions
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /home/ramiro_rego/quiz-backend
+            echo "Running PPTX question upload on production..."
+            venv/bin/python upload_pptx_questions.py
+            echo "Upload complete!"
