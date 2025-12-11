@@ -4,3 +4,4 @@ pytest
 psycopg2
 uvicorn
 ruff
+python-pptx
