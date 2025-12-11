@@ -1,0 +1,47 @@
+name: Upload PPTX Questions
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to upload to'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  upload-staging:
+    name: Upload Questions to Staging
+    if: github.event.inputs.environment == 'staging'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Upload PPTX Questions to Staging
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /home/ramiro_rego/quiz-backend-staging
+            echo "Running PPTX question upload on staging..."
+            venv/bin/python upload_pptx_questions.py
+            echo "Upload complete!"
+
+  upload-production:
+    name: Upload Questions to Production
+    if: github.event.inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Upload PPTX Questions to Production
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /home/ramiro_rego/quiz-backend
+            echo "Running PPTX question upload on production..."
+            venv/bin/python upload_pptx_questions.py
+            echo "Upload complete!"
