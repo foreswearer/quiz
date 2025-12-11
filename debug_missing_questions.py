@@ -2,13 +2,14 @@
 """
 Debug why questions 67+ aren't being parsed.
 """
+
 import re
 from pptx import Presentation
 
 
 def extract_question_number(text):
     """Extract question number from text like '1. Question text...'"""
-    match = re.match(r'^(\d+)\.\s+', text)
+    match = re.match(r"^(\d+)\.\s+", text)
     if match:
         return int(match.group(1))
     return None
@@ -21,9 +22,9 @@ def debug_slides(pptx_path, start_slide=130, end_slide=140):
 
     for slide_num in range(start_slide, min(end_slide, len(slides))):
         slide = slides[slide_num]
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"SLIDE {slide_num + 1}")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         for shape_idx, shape in enumerate(slide.shapes):
             if not hasattr(shape, "text_frame"):
@@ -45,7 +46,9 @@ def debug_slides(pptx_path, start_slide=130, end_slide=140):
                         bold_count += 1
 
                 if bold_count > 0:
-                    print(f"  Para {para_idx}: '{para_text[:60]}' [HAS {bold_count} BOLD RUNS]")
+                    print(
+                        f"  Para {para_idx}: '{para_text[:60]}' [HAS {bold_count} BOLD RUNS]"
+                    )
                 else:
                     print(f"  Para {para_idx}: '{para_text[:60]}'")
 
