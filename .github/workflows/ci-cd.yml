@@ -71,6 +71,16 @@ jobs:
           script: |
             cd /home/ramiro_rego/quiz-backend-staging
             ./deploy_staging.sh
+      - name: Upload PPTX Questions (Staging)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /home/ramiro_rego/quiz-backend-staging
+            echo "Running PPTX question upload..."
+            venv/bin/python upload_pptx_questions.py || echo "Upload script completed with warnings"
       - name: Verify Staging Service
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -141,6 +151,16 @@ jobs:
           script: |
             cd /home/ramiro_rego/quiz-backend
             ./deploy.sh
+      - name: Upload PPTX Questions (Production)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /home/ramiro_rego/quiz-backend
+            echo "Running PPTX question upload..."
+            venv/bin/python upload_pptx_questions.py || echo "Upload script completed with warnings"
       - name: Verify Production Service and Health Check
         uses: appleboy/ssh-action@v1.0.3
         with:
