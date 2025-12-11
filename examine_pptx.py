@@ -11,7 +11,7 @@ def examine_pptx(pptx_path):
     prs = Presentation(pptx_path)
 
     print(f"Total slides: {len(prs.slides)}")
-    print(f"\nExamining first 3 slides:\n" + "=" * 80)
+    print("\nExamining first 3 slides:\n" + "=" * 80)
 
     for idx, slide in enumerate(list(prs.slides)[:10], 1):
         print(f"\n--- Slide {idx} ---")
