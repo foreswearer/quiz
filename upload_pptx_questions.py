@@ -3,6 +3,7 @@
 Upload questions from PPTX to database.
 Reads Cloud Digital Leader Practice Questions PPTX and uploads to question_bank.
 """
+
 import sys
 from datetime import datetime
 from app.db import get_connection
@@ -44,28 +45,33 @@ def create_backup(conn):
     from app.config import DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
 
     cmd = [
-        'pg_dump',
-        '-h', DB_HOST,
-        '-p', str(DB_PORT),
-        '-U', DB_USER,
-        '-t', 'question_bank',
-        '-t', 'question_option',
-        '--inserts',
-        '--data-only',
-        DB_NAME
+        "pg_dump",
+        "-h",
+        DB_HOST,
+        "-p",
+        str(DB_PORT),
+        "-U",
+        DB_USER,
+        "-t",
+        "question_bank",
+        "-t",
+        "question_option",
+        "--inserts",
+        "--data-only",
+        DB_NAME,
     ]
 
     try:
         result = subprocess.run(
             cmd,
-            env={'PGPASSWORD': DB_PASSWORD},
+            env={"PGPASSWORD": DB_PASSWORD},
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=30,
         )
 
         if result.returncode == 0:
-            with open(backup_file, 'w') as f:
+            with open(backup_file, "w") as f:
                 f.write(result.stdout)
             print(f"✓ Backup created: {backup_file}")
             return backup_file
@@ -89,7 +95,7 @@ def upload_questions(conn, questions, course_id=1, start_from=None):
         skipped = 0
 
         for q in questions:
-            qnum = q['question_number']
+            qnum = q["question_number"]
 
             # Skip if question number <= start_from
             if start_from and qnum <= start_from:
@@ -97,28 +103,40 @@ def upload_questions(conn, questions, course_id=1, start_from=None):
                 continue
 
             # Insert question
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO question_bank (course_id, question_text, question_type, default_points)
                 VALUES (%s, %s, %s, %s)
                 RETURNING id
-            """, (course_id, q['question_text'], q['question_type'], 0.5))
+            """,
+                (course_id, q["question_text"], q["question_type"], 0.5),
+            )
 
             question_id = cur.fetchone()[0]
 
             # Insert options
             # For single_choice: correct_index is an int
             # For multiple_choice: correct_index is a list of ints
-            correct_indices = q['correct_index'] if isinstance(q['correct_index'], list) else [q['correct_index']]
+            correct_indices = (
+                q["correct_index"]
+                if isinstance(q["correct_index"], list)
+                else [q["correct_index"]]
+            )
 
-            for idx, option_text in enumerate(q['options']):
-                is_correct = (idx in correct_indices)
-                cur.execute("""
+            for idx, option_text in enumerate(q["options"]):
+                is_correct = idx in correct_indices
+                cur.execute(
+                    """
                     INSERT INTO question_option (question_id, option_text, is_correct, order_index)
                     VALUES (%s, %s, %s, %s)
-                """, (question_id, option_text, is_correct, idx + 1))
+                """,
+                    (question_id, option_text, is_correct, idx + 1),
+                )
 
             uploaded += 1
-            print(f"  ✓ Uploaded Q{qnum} (DB ID: {question_id}, type: {q['question_type']})")
+            print(
+                f"  ✓ Uploaded Q{qnum} (DB ID: {question_id}, type: {q['question_type']})"
+            )
 
         conn.commit()
         print(f"\n✓ Upload complete: {uploaded} questions uploaded, {skipped} skipped")
@@ -128,9 +146,9 @@ def upload_questions(conn, questions, course_id=1, start_from=None):
 def main():
     pptx_path = "question_pptx/Cloud Digital Leader - Practice questions.pptx"
 
-    print("="*80)
+    print("=" * 80)
     print("PPTX Question Upload Tool")
-    print("="*80)
+    print("=" * 80)
 
     # Parse PPTX
     print("\n[1/4] Parsing PPTX file...")
@@ -164,9 +182,9 @@ def main():
         uploaded = upload_questions(conn, questions, course_id=1, start_from=highest)
 
         if uploaded > 0:
-            print("\n" + "="*80)
+            print("\n" + "=" * 80)
             print(f"SUCCESS! Uploaded {uploaded} new questions to database")
-            print("="*80)
+            print("=" * 80)
             return 0
         else:
             print("\nNo new questions to upload")
@@ -175,6 +193,7 @@ def main():
     except Exception as e:
         print(f"\nERROR: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
     finally:

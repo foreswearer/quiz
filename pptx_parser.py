@@ -1,6 +1,7 @@
 """
 Shared PPTX parsing utilities for Cloud Digital Leader quiz questions.
 """
+
 import re
 from pptx import Presentation
 
