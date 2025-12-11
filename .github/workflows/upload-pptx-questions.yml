@@ -1,6 +1,8 @@
 name: Upload PPTX Questions
 
 on:
+  push:
+    branches: [ "main", "develop" ]
   workflow_dispatch:
     inputs:
       environment:
@@ -14,7 +16,7 @@ on:
 jobs:
   upload-staging:
     name: Upload Questions to Staging
-    if: github.event.inputs.environment == 'staging'
+    if: (github.event.inputs.environment == 'staging') || (github.ref == 'refs/heads/develop' && github.event_name == 'push')
     runs-on: ubuntu-latest
     steps:
       - name: Upload PPTX Questions to Staging
@@ -31,7 +33,7 @@ jobs:
 
   upload-production:
     name: Upload Questions to Production
-    if: github.event.inputs.environment == 'production'
+    if: (github.event.inputs.environment == 'production') || (github.ref == 'refs/heads/main' && github.event_name == 'push')
     runs-on: ubuntu-latest
     steps:
       - name: Upload PPTX Questions to Production
