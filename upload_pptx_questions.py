@@ -248,10 +248,6 @@ def main():
         highest = get_highest_question_number(conn)
         print(f"✓ Highest question number in database: {highest}")
 
-        # Create backup
-        print("\n[3/4] Creating database backup...")
-        backup_file = create_backup(conn)
-
         # Upload questions
         print(f"\n[4/4] Uploading questions (starting from question {highest + 1})...")
         uploaded = upload_questions(conn, questions, course_id=1, start_from=highest)
