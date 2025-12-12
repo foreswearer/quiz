@@ -253,10 +253,12 @@ def delete_test(
             # Authorization check
             is_teacher = user["role"] == "teacher"
             is_owner = test_created_by == user["id"]
-            print(f"[DELETE TEST] Authorization: is_teacher={is_teacher}, is_owner={is_owner}, user_role={user['role']}, user_id={user['id']}, test_created_by={test_created_by}")  # Debug log
+            print(
+                f"[DELETE TEST] Authorization: is_teacher={is_teacher}, is_owner={is_owner}, user_role={user['role']}, user_id={user['id']}, test_created_by={test_created_by}"
+            )  # Debug log
 
             if not is_teacher and not is_owner:
-                print(f"[DELETE TEST] Authorization FAILED")  # Debug log
+                print("[DELETE TEST] Authorization FAILED")  # Debug log
                 return {"error": "you can only delete tests you created"}
             test_title = test["title"]
 
