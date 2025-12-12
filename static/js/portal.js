@@ -690,7 +690,7 @@
         if (!currentDni) return;
 
         try {
-            const response = await fetch(`/api/users?teacher_dni=${encodeURIComponent(currentDni)}`);
+            const response = await fetch(`/users?teacher_dni=${encodeURIComponent(currentDni)}`);
             const data = await response.json();
 
             if (data.error) {
@@ -751,7 +751,7 @@
         }
 
         try {
-            const response = await fetch(`/api/users/${userId}/role?teacher_dni=${encodeURIComponent(currentDni)}&new_role=${encodeURIComponent(newRole)}`, {
+            const response = await fetch(`/users/${userId}/role?teacher_dni=${encodeURIComponent(currentDni)}&new_role=${encodeURIComponent(newRole)}`, {
                 method: "PUT"
             });
             const data = await response.json();
@@ -992,7 +992,7 @@
         }
 
         try {
-            const response = await fetch(`/api/attempts/${attemptId}/study_mode?dni=${encodeURIComponent(dni)}`, {
+            const response = await fetch(`/attempts/${attemptId}/study_mode?dni=${encodeURIComponent(dni)}`, {
                 method: "POST"
             });
             const data = await response.json();
@@ -1020,7 +1020,7 @@
         }
 
         try {
-            const response = await fetch(`/api/tests/${testId}?dni=${encodeURIComponent(dni)}`, {
+            const response = await fetch(`/tests/${testId}?dni=${encodeURIComponent(dni)}`, {
                 method: "DELETE"
             });
             const data = await response.json();

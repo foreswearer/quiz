@@ -164,7 +164,7 @@
             });
 
         // Fetch and display active users count
-        fetch('/api/users/stats')
+        fetch('/users/stats')
             .then(r => r.json())
             .then(data => {
                 document.getElementById('active-users-count').textContent =
