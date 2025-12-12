@@ -168,6 +168,9 @@
     const loadAnalyticsBtn = document.getElementById("load-analytics-btn");
     const analyticsOutput = document.getElementById("analytics-output");
     const btnQuestionBank = document.getElementById("btn-question-bank");
+    const manageUsersBtn = document.getElementById("manage-users-btn");
+    const usersManagement = document.getElementById("users-management");
+    const usersList = document.getElementById("users-list");
 
     let currentDni = null;
     let currentRole = null;
@@ -268,6 +271,21 @@
                 ? new Date(a.submitted_at).toLocaleString()
                 : "-";
 
+            // Build actions column
+            let actionsHtml = '<div style="display: flex; gap: 0.5rem;">';
+
+            // Study mode button for failed attempts (percentage < 70%)
+            if (a.status === "graded" && a.percentage != null && a.percentage < 70) {
+                actionsHtml += `<button class="study-mode-btn" data-attempt-id="${a.attempt_id}" data-test-title="${a.test_title || 'N/A'}">📚 Study</button>`;
+            }
+
+            // Delete button for tests created by student
+            if (a.can_delete) {
+                actionsHtml += `<button class="delete-test-btn" data-test-id="${a.test_id}" data-test-title="${a.test_title || 'N/A'}">🗑️ Delete</button>`;
+            }
+
+            actionsHtml += '</div>';
+
             row.innerHTML = `
                 <td>${submittedStr}</td>
                 <td>${a.test_title || "N/A"}</td>
@@ -275,8 +293,18 @@
                 <td>${score} / ${maxScore}</td>
                 <td>${percentage}%</td>
                 <td>${a.status || "-"}</td>
+                <td>${actionsHtml}</td>
             `;
             attemptsTableBody.appendChild(row);
+        });
+
+        // Add event listeners for action buttons
+        document.querySelectorAll(".study-mode-btn").forEach(btn => {
+            btn.addEventListener("click", handleStudyMode);
+        });
+
+        document.querySelectorAll(".delete-test-btn").forEach(btn => {
+            btn.addEventListener("click", handleDeleteTest);
         });
     }
 
@@ -643,6 +671,105 @@
         });
     }
 
+    // Teacher: manage users
+    if (manageUsersBtn) {
+        manageUsersBtn.addEventListener("click", async function () {
+            dbg("Manage users button clicked");
+
+            // Toggle visibility
+            if (usersManagement.style.display === "none") {
+                usersManagement.style.display = "block";
+                await loadUsers();
+            } else {
+                usersManagement.style.display = "none";
+            }
+        });
+    }
+
+    async function loadUsers() {
+        if (!currentDni) return;
+
+        try {
+            const response = await fetch(`/api/users?teacher_dni=${encodeURIComponent(currentDni)}`);
+            const data = await response.json();
+
+            if (data.error) {
+                usersList.innerHTML = `<p style="color: var(--error);">${data.error}</p>`;
+                return;
+            }
+
+            // Build users table
+            let html = '<table style="width: 100%; border-collapse: collapse;"><thead><tr>';
+            html += '<th>Name</th><th>DNI</th><th>Email</th><th>Role</th><th>Actions</th>';
+            html += '</tr></thead><tbody>';
+
+            data.users.forEach(user => {
+                html += '<tr>';
+                html += `<td>${user.full_name}</td>`;
+                html += `<td>${user.dni}</td>`;
+                html += `<td>${user.email}</td>`;
+                html += `<td>${user.role}</td>`;
+                html += `<td>`;
+                html += `<select class="role-select" data-user-id="${user.id}" data-current-role="${user.role}">`;
+                html += `<option value="student" ${user.role === 'student' ? 'selected' : ''}>Student</option>`;
+                html += `<option value="power_student" ${user.role === 'power_student' ? 'selected' : ''}>Power Student</option>`;
+                html += `<option value="teacher" ${user.role === 'teacher' ? 'selected' : ''}>Teacher</option>`;
+                html += `<option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>`;
+                html += `</select>`;
+                html += `<button class="update-role-btn" data-user-id="${user.id}">Update</button>`;
+                html += `</td>`;
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            usersList.innerHTML = html;
+
+            // Add event listeners for update buttons
+            document.querySelectorAll(".update-role-btn").forEach(btn => {
+                btn.addEventListener("click", handleUpdateRole);
+            });
+        } catch (error) {
+            console.error("Load users error:", error);
+            usersList.innerHTML = `<p style="color: var(--error);">Failed to load users</p>`;
+        }
+    }
+
+    async function handleUpdateRole(e) {
+        const userId = e.target.dataset.userId;
+        const selectEl = document.querySelector(`.role-select[data-user-id="${userId}"]`);
+        const newRole = selectEl.value;
+        const oldRole = selectEl.dataset.currentRole;
+
+        if (newRole === oldRole) {
+            alert("Role hasn't changed");
+            return;
+        }
+
+        if (!confirm(`Change user role from "${oldRole}" to "${newRole}"?`)) {
+            selectEl.value = oldRole; // Reset
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/users/${userId}/role?teacher_dni=${encodeURIComponent(currentDni)}&new_role=${encodeURIComponent(newRole)}`, {
+                method: "PUT"
+            });
+            const data = await response.json();
+
+            if (data.error) {
+                alert("Error updating role: " + data.error);
+                selectEl.value = oldRole; // Reset
+            } else {
+                alert(data.message);
+                selectEl.dataset.currentRole = newRole; // Update stored value
+            }
+        } catch (error) {
+            console.error("Update role error:", error);
+            alert("Failed to update role");
+            selectEl.value = oldRole; // Reset
+        }
+    }
+
     // Teacher: delete test
     deleteTestBtn.addEventListener("click", async function () {
         deleteTestInfo.textContent = "";
@@ -853,6 +980,63 @@
             analyticsOutput.textContent = "Error loading analytics: " + e;
         }
     });
+
+    // ---------- Study Mode Handler ----------
+    async function handleStudyMode(e) {
+        const attemptId = e.target.dataset.attemptId;
+        const testTitle = e.target.dataset.testTitle;
+        const dni = getCookie("quiz_dni");
+
+        if (!confirm(`Create a study test with questions you got wrong from "${testTitle}"?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/attempts/${attemptId}/study_mode?dni=${encodeURIComponent(dni)}`, {
+                method: "POST"
+            });
+            const data = await response.json();
+
+            if (data.error) {
+                alert("Error creating study mode: " + data.error);
+            } else {
+                alert(`Study mode test created: "${data.title}" with ${data.num_questions} questions.\nStarting now!`);
+                window.location.href = `/quiz?test_id=${data.test_id}&dni=${encodeURIComponent(dni)}`;
+            }
+        } catch (error) {
+            console.error("Study mode error:", error);
+            alert("Failed to create study mode test");
+        }
+    }
+
+    // ---------- Delete Test Handler ----------
+    async function handleDeleteTest(e) {
+        const testId = e.target.dataset.testId;
+        const testTitle = e.target.dataset.testTitle;
+        const dni = getCookie("quiz_dni");
+
+        if (!confirm(`Are you sure you want to delete "${testTitle}"?\nThis will also delete all attempts and results!`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/tests/${testId}?dni=${encodeURIComponent(dni)}`, {
+                method: "DELETE"
+            });
+            const data = await response.json();
+
+            if (data.error) {
+                alert("Error deleting test: " + data.error);
+            } else {
+                alert(`Test deleted: "${data.deleted_test_title}"\n${data.deleted_attempts} attempts removed`);
+                // Reload the dashboard
+                loadDashboardBtn.click();
+            }
+        } catch (error) {
+            console.error("Delete test error:", error);
+            alert("Failed to delete test");
+        }
+    }
 
     // ---------- On load: read cookie and auto-load dashboard ----------
     const cookieDni = getCookie("quiz_dni");

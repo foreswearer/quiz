@@ -7,6 +7,7 @@ Structure:
 - attempts.py  : /tests/{id}/start, /attempts/{id}/submit, /student/{dni}/attempts
 - analytics.py : /tests/{id}/results, /tests/{id}/analytics, /teacher/dashboard_overview
 - questions.py : /courses, /api/question-bank/*
+- users.py     : /users, /users/{id}/role (teacher-only user management)
 """
 
 from fastapi import APIRouter
@@ -16,6 +17,7 @@ from .tests import router as tests_router
 from .attempts import router as attempts_router
 from .analytics import router as analytics_router
 from .questions import router as questions_router
+from .users import router as users_router
 
 router = APIRouter()
 
@@ -25,3 +27,4 @@ router.include_router(tests_router)
 router.include_router(attempts_router)
 router.include_router(analytics_router)
 router.include_router(questions_router)
+router.include_router(users_router)

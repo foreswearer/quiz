@@ -329,7 +329,8 @@ def student_attempts(dni: str):
                     ta.max_score,
                     ta.percentage,
                     ta.status,
-                    ta.submitted_at
+                    ta.submitted_at,
+                    t.created_by
                 FROM test_attempt ta
                 JOIN test t ON t.id = ta.test_id
                 WHERE ta.student_id = %s
@@ -350,6 +351,7 @@ def student_attempts(dni: str):
                 percentage,
                 status,
                 submitted_at,
+                created_by,
             ) in rows:
                 attempts.append(
                     {
@@ -368,6 +370,7 @@ def student_attempts(dni: str):
                         "submitted_at": submitted_at.isoformat()
                         if submitted_at is not None
                         else None,
+                        "can_delete": created_by == user["id"],
                     }
                 )
 
