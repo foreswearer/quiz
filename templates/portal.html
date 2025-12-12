@@ -32,7 +32,7 @@
         <div id="login-card" class="card">
             <h2>🔐 Identify Yourself</h2>
             <label for="student-dni">Enter your DNI:</label>
-            <input type="text" id="student-dni" placeholder="e.g. 12345678A" maxlength="20">
+            <input type="text" id="student-dni" placeholder="e.g. 12345678" maxlength="20">
             <button type="button" id="load-dashboard">Load My Dashboard</button>
             <div id="error" class="hidden"></div>
         </div>
@@ -44,7 +44,31 @@
                 <h2 id="student-info">Welcome!</h2>
             </div>
 
-            <div class="two-columns">
+            <!-- Teacher Panel (hidden for students) - Full Width -->
+            <div id="teacher-panel" class="card hidden">
+                <h2>👩‍🏫 Teacher Panel</h2>
+                <p class="small" style="margin-bottom: 1rem; color: var(--text-muted);">
+                    Manage tests and view detailed analytics.
+                </p>
+
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+                    <button type="button" id="btn-question-bank">📚 Manage Questions</button>
+                    <button type="button" id="manage-users-btn">👥 Manage Users</button>
+                    <button type="button" id="delete-test-btn">🗑️ Delete Test</button>
+                    <button type="button" id="rename-test-btn">✏️ Rename Test</button>
+                    <button type="button" id="load-analytics-btn">📊 Show Analytics</button>
+                </div>
+
+                <div id="users-management" style="margin-top: 0.5rem; display: none;">
+                    <h3>User Management</h3>
+                    <div id="users-list" style="margin-top: 1rem;"></div>
+                </div>
+
+                <div id="delete-test-info" style="margin-top: 0.5rem;"></div>
+                <div id="analytics-output" style="margin-top: 0.5rem;"></div>
+            </div>
+
+            <div class="two-columns" style="grid-template-columns: 1fr 2fr;">
                 <!-- Left Column: Take a Test -->
                 <div class="card">
                     <h2>📝 Take a Test</h2>
@@ -114,30 +138,6 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Teacher Panel (hidden for students) -->
-            <div id="teacher-panel" class="card hidden">
-                <h2>👩‍🏫 Teacher Panel</h2>
-                <p class="small" style="margin-bottom: 1rem; color: var(--text-muted);">
-                    Manage tests and view detailed analytics.
-                </p>
-                
-                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
-                    <button type="button" id="btn-question-bank">📚 Manage Questions</button>
-                    <button type="button" id="manage-users-btn">👥 Manage Users</button>
-                    <button type="button" id="delete-test-btn">🗑️ Delete Test</button>
-                    <button type="button" id="rename-test-btn">✏️ Rename Test</button>
-                    <button type="button" id="load-analytics-btn">📊 Show Analytics</button>
-                </div>
-
-                <div id="users-management" style="margin-top: 0.5rem; display: none;">
-                    <h3>User Management</h3>
-                    <div id="users-list" style="margin-top: 1rem;"></div>
-                </div>
-
-                <div id="delete-test-info" style="margin-top: 0.5rem;"></div>
-                <div id="analytics-output" style="margin-top: 0.5rem;"></div>
-            </div>
         </div>
 
         <!-- Footer with version -->
@@ -164,11 +164,11 @@
             });
 
         // Fetch and display active users count
-        fetch('/api/users/stats')
+        fetch('/users/stats')
             .then(r => r.json())
             .then(data => {
                 document.getElementById('active-users-count').textContent =
-                    '👥 ' + data.active_users + ' active users';
+                    '👥 ' + data.active_users + ' active, ' + data.inactive_users + ' inactive';
             })
             .catch(() => {
                 document.getElementById('active-users-count').textContent = '';
