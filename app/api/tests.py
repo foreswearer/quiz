@@ -226,10 +226,12 @@ def delete_test(
     Teachers can delete any test.
     Students and power_students can delete tests they created.
     """
+    print(f"[DELETE TEST] test_id={test_id}, dni={dni}")  # Debug log
     conn = get_connection()
     try:
         with conn.cursor() as cur:
             user = get_user_by_dni(cur, dni)
+            print(f"[DELETE TEST] user={user}")  # Debug log
             if user is None:
                 return {"error": f"user with DNI {dni} not found"}
 
@@ -248,8 +250,10 @@ def delete_test(
             # Authorization check
             is_teacher = user["role"] == "teacher"
             is_owner = test_created_by == user["id"]
+            print(f"[DELETE TEST] Authorization: is_teacher={is_teacher}, is_owner={is_owner}, user_role={user['role']}, user_id={user['id']}, test_created_by={test_created_by}")  # Debug log
 
             if not is_teacher and not is_owner:
+                print(f"[DELETE TEST] Authorization FAILED")  # Debug log
                 return {"error": "you can only delete tests you created"}
             test_title = test["title"]
 
