@@ -8,26 +8,50 @@ router = APIRouter()
 def get_user_stats():
     """
     Get user statistics (total users, active users, etc.)
+    Active users = users with activity in the last 2 hours.
     Public endpoint - no authentication required.
     """
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            # Get active users count
-            cur.execute("SELECT COUNT(*) FROM app_user WHERE is_active = true")
-            active_count = cur.fetchone()[0]
-
-            # Get total users count
-            cur.execute("SELECT COUNT(*) FROM app_user")
-            total_count = cur.fetchone()[0]
-
-            # Get counts by role
+            # Get active users count (activity in last 2 hours)
             cur.execute(
                 """
-                SELECT role, COUNT(*)
-                FROM app_user
-                WHERE is_active = true
-                GROUP BY role
+                SELECT COUNT(DISTINCT ta.student_id)
+                FROM test_attempt ta
+                WHERE ta.started_at >= NOW() - INTERVAL '2 hours'
+                   OR ta.submitted_at >= NOW() - INTERVAL '2 hours'
+                """
+            )
+            active_count = cur.fetchone()[0] or 0
+
+            # Get inactive users count (no activity in last 2 hours)
+            cur.execute(
+                """
+                SELECT COUNT(*)
+                FROM app_user u
+                WHERE u.id NOT IN (
+                    SELECT DISTINCT ta.student_id
+                    FROM test_attempt ta
+                    WHERE ta.started_at >= NOW() - INTERVAL '2 hours'
+                       OR ta.submitted_at >= NOW() - INTERVAL '2 hours'
+                )
+                """
+            )
+            inactive_count = cur.fetchone()[0] or 0
+
+            # Get total users count
+            total_count = active_count + inactive_count
+
+            # Get counts by role (for active users only)
+            cur.execute(
+                """
+                SELECT u.role, COUNT(DISTINCT u.id)
+                FROM app_user u
+                JOIN test_attempt ta ON ta.student_id = u.id
+                WHERE ta.started_at >= NOW() - INTERVAL '2 hours'
+                   OR ta.submitted_at >= NOW() - INTERVAL '2 hours'
+                GROUP BY u.role
                 """
             )
             role_counts = {}
@@ -36,6 +60,7 @@ def get_user_stats():
 
             return {
                 "active_users": active_count,
+                "inactive_users": inactive_count,
                 "total_users": total_count,
                 "by_role": role_counts,
             }

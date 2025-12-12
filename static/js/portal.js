@@ -483,7 +483,7 @@
             }
 
             if (currentRole !== "teacher") {
-                currentRole = "student";
+                currentRole = attemptsData.student?.role || "student";
                 teacherPanel.classList.add("hidden");
                 if (dashboardBtn) {
                     dashboardBtn.classList.add("hidden");
@@ -492,7 +492,11 @@
                 if (maxAttemptsContainer) {
                     maxAttemptsContainer.classList.add("hidden");
                 }
-                studentInfo.textContent = `Welcome, ${dni} (Student)`;
+                // Show full name and specific role
+                const userName = attemptsData.student?.name || dni;
+                const roleDisplay = currentRole === "power_student" ? "Power Student" :
+                                   currentRole.charAt(0).toUpperCase() + currentRole.slice(1);
+                studentInfo.textContent = `Welcome, ${userName} (${roleDisplay})`;
             }
         } catch (e) {
             dbg("loadDashboard exception", e);
@@ -698,76 +702,115 @@
                 return;
             }
 
-            // Build users table
-            let html = '<table style="width: 100%; border-collapse: collapse;"><thead><tr>';
-            html += '<th>Name</th><th>DNI</th><th>Email</th><th>Role</th><th>Actions</th>';
+            // Build bulk update controls
+            let html = '<div style="margin-bottom: 1rem; padding: 1rem; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 4px;">';
+            html += '<label>Change selected users to: </label>';
+            html += '<select id="bulk-role-select" style="margin: 0 0.5rem;">';
+            html += '<option value="">-- Select Role --</option>';
+            html += '<option value="student">Student</option>';
+            html += '<option value="power_student">Power Student</option>';
+            html += '<option value="teacher">Teacher</option>';
+            html += '<option value="admin">Admin</option>';
+            html += '</select>';
+            html += '<button id="bulk-update-btn" style="margin-left: 0.5rem;">Update Selected</button>';
+            html += '</div>';
+
+            // Build users table with checkboxes
+            html += '<table style="width: 100%; border-collapse: collapse;"><thead><tr>';
+            html += '<th><input type="checkbox" id="select-all-users" title="Select All"></th>';
+            html += '<th>Name</th><th>Role</th><th>DNI</th><th>Email</th>';
             html += '</tr></thead><tbody>';
 
             data.users.forEach(user => {
+                const roleDisplay = user.role === 'power_student' ? 'Power Student' :
+                                   user.role.charAt(0).toUpperCase() + user.role.slice(1);
                 html += '<tr>';
+                html += `<td><input type="checkbox" class="user-checkbox" data-user-id="${user.id}" data-current-role="${user.role}"></td>`;
                 html += `<td>${user.full_name}</td>`;
+                html += `<td>${roleDisplay}</td>`;
                 html += `<td>${user.dni}</td>`;
                 html += `<td>${user.email}</td>`;
-                html += `<td>${user.role}</td>`;
-                html += `<td>`;
-                html += `<select class="role-select" data-user-id="${user.id}" data-current-role="${user.role}">`;
-                html += `<option value="student" ${user.role === 'student' ? 'selected' : ''}>Student</option>`;
-                html += `<option value="power_student" ${user.role === 'power_student' ? 'selected' : ''}>Power Student</option>`;
-                html += `<option value="teacher" ${user.role === 'teacher' ? 'selected' : ''}>Teacher</option>`;
-                html += `<option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>`;
-                html += `</select>`;
-                html += `<button class="update-role-btn" data-user-id="${user.id}">Update</button>`;
-                html += `</td>`;
                 html += '</tr>';
             });
 
             html += '</tbody></table>';
             usersList.innerHTML = html;
 
-            // Add event listeners for update buttons
-            document.querySelectorAll(".update-role-btn").forEach(btn => {
-                btn.addEventListener("click", handleUpdateRole);
+            // Add event listeners
+            document.getElementById("select-all-users").addEventListener("change", function(e) {
+                document.querySelectorAll(".user-checkbox").forEach(cb => {
+                    cb.checked = e.target.checked;
+                });
             });
+
+            document.getElementById("bulk-update-btn").addEventListener("click", handleBulkUpdateRole);
         } catch (error) {
             console.error("Load users error:", error);
             usersList.innerHTML = `<p style="color: var(--error);">Failed to load users</p>`;
         }
     }
 
-    async function handleUpdateRole(e) {
-        const userId = e.target.dataset.userId;
-        const selectEl = document.querySelector(`.role-select[data-user-id="${userId}"]`);
-        const newRole = selectEl.value;
-        const oldRole = selectEl.dataset.currentRole;
+    async function handleBulkUpdateRole() {
+        const newRole = document.getElementById("bulk-role-select").value;
 
-        if (newRole === oldRole) {
-            alert("Role hasn't changed");
+        if (!newRole) {
+            alert("Please select a role first");
             return;
         }
 
-        if (!confirm(`Change user role from "${oldRole}" to "${newRole}"?`)) {
-            selectEl.value = oldRole; // Reset
+        // Get all checked users
+        const checkedUsers = Array.from(document.querySelectorAll(".user-checkbox:checked"));
+
+        if (checkedUsers.length === 0) {
+            alert("Please select at least one user");
             return;
         }
 
-        try {
-            const response = await fetch(`/users/${userId}/role?teacher_dni=${encodeURIComponent(currentDni)}&new_role=${encodeURIComponent(newRole)}`, {
-                method: "PUT"
-            });
-            const data = await response.json();
+        const count = checkedUsers.length;
+        const roleDisplay = newRole === 'power_student' ? 'Power Student' :
+                           newRole.charAt(0).toUpperCase() + newRole.slice(1);
 
-            if (data.error) {
-                alert("Error updating role: " + data.error);
-                selectEl.value = oldRole; // Reset
-            } else {
-                alert(data.message);
-                selectEl.dataset.currentRole = newRole; // Update stored value
+        if (!confirm(`Change ${count} user(s) to ${roleDisplay}?`)) {
+            return;
+        }
+
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (const checkbox of checkedUsers) {
+            const userId = checkbox.dataset.userId;
+            const oldRole = checkbox.dataset.currentRole;
+
+            if (newRole === oldRole) {
+                continue; // Skip if role hasn't changed
             }
-        } catch (error) {
-            console.error("Update role error:", error);
-            alert("Failed to update role");
-            selectEl.value = oldRole; // Reset
+
+            try {
+                const response = await fetch(`/users/${userId}/role?teacher_dni=${encodeURIComponent(currentDni)}&new_role=${encodeURIComponent(newRole)}`, {
+                    method: "PUT"
+                });
+                const data = await response.json();
+
+                if (data.error) {
+                    console.error(`Failed to update user ${userId}:`, data.error);
+                    errorCount++;
+                } else {
+                    successCount++;
+                }
+            } catch (error) {
+                console.error(`Error updating user ${userId}:`, error);
+                errorCount++;
+            }
         }
+
+        if (errorCount > 0) {
+            alert(`Updated ${successCount} user(s), ${errorCount} failed. See console for details.`);
+        } else {
+            alert(`Successfully updated ${successCount} user(s) to ${roleDisplay}`);
+        }
+
+        // Reload the user list
+        await loadUsers();
     }
 
     // Teacher: delete test
