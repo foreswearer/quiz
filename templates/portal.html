@@ -32,7 +32,7 @@
         <div id="login-card" class="card">
             <h2>🔐 Identify Yourself</h2>
             <label for="student-dni">Enter your DNI:</label>
-            <input type="text" id="student-dni" placeholder="e.g. 12345678A" maxlength="20">
+            <input type="text" id="student-dni" placeholder="e.g. 12345678" maxlength="20">
             <button type="button" id="load-dashboard">Load My Dashboard</button>
             <div id="error" class="hidden"></div>
         </div>
@@ -164,11 +164,11 @@
             });
 
         // Fetch and display active users count
-        fetch('/api/users/stats')
+        fetch('/users/stats')
             .then(r => r.json())
             .then(data => {
                 document.getElementById('active-users-count').textContent =
-                    '👥 ' + data.active_users + ' active users';
+                    '👥 ' + data.active_users + ' active, ' + data.inactive_users + ' inactive';
             })
             .catch(() => {
                 document.getElementById('active-users-count').textContent = '';
