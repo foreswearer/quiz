@@ -4,6 +4,45 @@ from ..db import get_connection, get_user_by_dni
 router = APIRouter()
 
 
+@router.get("/users/stats")
+def get_user_stats():
+    """
+    Get user statistics (total users, active users, etc.)
+    Public endpoint - no authentication required.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # Get active users count
+            cur.execute("SELECT COUNT(*) FROM app_user WHERE is_active = true")
+            active_count = cur.fetchone()[0]
+
+            # Get total users count
+            cur.execute("SELECT COUNT(*) FROM app_user")
+            total_count = cur.fetchone()[0]
+
+            # Get counts by role
+            cur.execute(
+                """
+                SELECT role, COUNT(*)
+                FROM app_user
+                WHERE is_active = true
+                GROUP BY role
+                """
+            )
+            role_counts = {}
+            for role, count in cur.fetchall():
+                role_counts[role] = count
+
+            return {
+                "active_users": active_count,
+                "total_users": total_count,
+                "by_role": role_counts,
+            }
+    finally:
+        conn.close()
+
+
 @router.get("/users")
 def list_users(
     teacher_dni: str = Query(..., description="Teacher DNI for authorization"),

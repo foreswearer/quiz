@@ -15,7 +15,10 @@
         <div class="toolbar">
             <div>
                 <h1>📚 Cloud Digital Leader Quiz</h1>
-                <p class="subtitle small">Practice for the Google Cloud certification</p>
+                <p class="subtitle small">
+                    Practice for the Google Cloud certification
+                    <span id="active-users-count" style="margin-left: 1rem; color: var(--primary);"></span>
+                </p>
             </div>
             <div class="toolbar-buttons">
                 <button type="button" id="btn-home" class="toolbar-btn">🏠 Home</button>
@@ -153,11 +156,22 @@
         fetch('/version')
             .then(r => r.json())
             .then(data => {
-                document.getElementById('version-display').textContent = 
+                document.getElementById('version-display').textContent =
                     'Version: ' + (data.version || 'unknown');
             })
             .catch(() => {
                 document.getElementById('version-display').textContent = 'Version: unknown';
+            });
+
+        // Fetch and display active users count
+        fetch('/api/users/stats')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('active-users-count').textContent =
+                    '👥 ' + data.active_users + ' active users';
+            })
+            .catch(() => {
+                document.getElementById('active-users-count').textContent = '';
             });
     </script>
 </body>
