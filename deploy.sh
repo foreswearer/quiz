@@ -1,97 +1,113 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+# Deployment script for quiz application
+# Usage: ./deploy.sh dev|main|both
 
-APP_DIR="/home/ramiro_rego/quiz-backend"
-VENV_DIR="$APP_DIR/venv"
-SERVICE_NAME="quiz-backend.service"
-SERVICE_FILE="/etc/systemd/system/$SERVICE_NAME"
+set -e
 
-echo "=== Starting deployment ==="
-cd "$APP_DIR"
+TARGET=$1
 
-# 1. Create or reuse virtual environment
-echo "Checking virtual environment at $VENV_DIR..."
-if [ ! -d "$VENV_DIR" ]; then
-  echo "Creating new virtual environment..."
-  python3 -m venv "$VENV_DIR"
-elif [ ! -f "$VENV_DIR/bin/activate" ]; then
-  echo "Virtual environment exists but is broken. Recreating..."
-  rm -rf "$VENV_DIR"
-  python3 -m venv "$VENV_DIR"
-else
-  echo "Using existing virtual environment."
+if [[ ! "$TARGET" =~ ^(dev|main|both)$ ]]; then
+    echo "Usage: $0 dev|main|both"
+    exit 1
 fi
 
-# 2. Activate venv and install dependencies
-echo "Activating virtual environment..."
-# shellcheck disable=SC1090
-source "$VENV_DIR/bin/activate"
+# Get current feature branch
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
-echo "Upgrading pip..."
-python -m pip install --upgrade pip
-
-if [ -f requirements.txt ]; then
-  echo "Installing dependencies from requirements.txt..."
-  pip install -r requirements.txt
-else
-  echo "⚠️  Warning: requirements.txt not found!"
+if [[ ! "$CURRENT_BRANCH" =~ ^claude/.*-01AZy5cn5rESGa65BKiAQQLH$ ]]; then
+    echo "❌ Current branch '$CURRENT_BRANCH' doesn't match the expected pattern"
+    exit 1
 fi
 
-# 3. Verify uvicorn is installed
-if [ ! -f "$VENV_DIR/bin/uvicorn" ]; then
-  echo "❌ ERROR: uvicorn not found in venv! Installing explicitly..."
-  pip install uvicorn
+echo "📦 Current branch: $CURRENT_BRANCH"
+
+# Ensure everything is committed
+if [[ -n $(git status --porcelain) ]]; then
+    echo "❌ Uncommitted changes detected. Please commit or stash them first."
+    exit 1
 fi
 
-echo "✅ Verifying uvicorn path: $(which uvicorn)"
+# Push current branch
+echo "🔄 Pushing current branch..."
+git push -u origin "$CURRENT_BRANCH"
 
-# 4. Create/update systemd service file
-echo "Creating systemd service file..."
-sudo tee "$SERVICE_FILE" > /dev/null <<EOF
-[Unit]
-Description=Cloud Digital Leader Quiz Backend (FastAPI)
-After=network.target
+deploy_to_develop() {
+    echo ""
+    echo "📘 Deploying to DEVELOP..."
 
-[Service]
-Type=simple
-User=ramiro_rego
-WorkingDirectory=$APP_DIR
-ExecStart=$VENV_DIR/bin/uvicorn main:app --host 0.0.0.0 --port 8000
-Restart=always
-RestartSec=5
-Environment="PATH=$VENV_DIR/bin:/usr/local/bin:/usr/bin:/bin"
-Environment="PYTHONPATH=$APP_DIR"
+    # Switch to develop
+    git checkout develop
+    git pull origin develop
 
-[Install]
-WantedBy=multi-user.target
-EOF
+    # Merge feature branch
+    echo "🔀 Merging $CURRENT_BRANCH into develop..."
+    git merge "$CURRENT_BRANCH" --no-edit
 
-echo "✅ Service file created at $SERVICE_FILE"
+    # Create sync branch for pushing
+    SYNC_BRANCH="claude/sync-develop-01AZy5cn5rESGa65BKiAQQLH"
+    git checkout -B "$SYNC_BRANCH"
 
-# 5. Reload systemd and enable service
-echo "Reloading systemd daemon..."
-sudo systemctl daemon-reload
+    echo "⬆️  Pushing to $SYNC_BRANCH..."
+    git push -u origin "$SYNC_BRANCH" -f
 
-echo "Enabling service..."
-sudo systemctl enable "$SERVICE_NAME"
+    echo "✅ Develop sync branch pushed!"
+    echo "   On DEV server, run:"
+    echo "   cd /path/to/quiz"
+    echo "   git checkout develop"
+    echo "   git merge origin/$SYNC_BRANCH"
+    echo "   sudo systemctl restart quiz"
+}
 
-# 6. Restart service
-echo "Restarting $SERVICE_NAME..."
-sudo systemctl restart "$SERVICE_NAME"
+deploy_to_main() {
+    echo ""
+    echo "📕 Deploying to MAIN..."
 
-# 7. Wait a moment and check status
-echo "Waiting 3 seconds for service to start..."
-sleep 3
+    # Switch to develop first (main should come from develop)
+    git checkout develop
+    git pull origin develop
 
-echo "Checking service status..."
-if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
-  echo "✅ Service is running!"
-  sudo systemctl status "$SERVICE_NAME" --no-pager
-else
-  echo "❌ Service failed to start!"
-  echo "Recent logs:"
-  sudo journalctl -u "$SERVICE_NAME" -n 20 --no-pager
-  exit 1
-fi
+    # Switch to main
+    git checkout main
+    git pull origin main
 
-echo "=== Deployment finished successfully ==="
+    # Merge develop into main
+    echo "🔀 Merging develop into main..."
+    git merge develop --no-edit
+
+    # Create sync branch for pushing
+    SYNC_BRANCH="claude/sync-main-01AZy5cn5rESGa65BKiAQQLH"
+    git checkout -B "$SYNC_BRANCH"
+
+    echo "⬆️  Pushing to $SYNC_BRANCH..."
+    git push -u origin "$SYNC_BRANCH" -f
+
+    echo "✅ Main sync branch pushed!"
+    echo "   On PROD server, run:"
+    echo "   cd /path/to/quiz"
+    echo "   git checkout main"
+    echo "   git merge origin/$SYNC_BRANCH"
+    echo "   sudo -u postgres psql quiz_platform -f db/migrations/001_add_power_student_role.sql"
+    echo "   sudo systemctl restart quiz"
+}
+
+# Execute deployment based on target
+case "$TARGET" in
+    dev)
+        deploy_to_develop
+        ;;
+    main)
+        deploy_to_main
+        ;;
+    both)
+        deploy_to_develop
+        deploy_to_main
+        ;;
+esac
+
+# Return to original branch
+echo ""
+echo "🔙 Returning to $CURRENT_BRANCH..."
+git checkout "$CURRENT_BRANCH"
+
+echo ""
+echo "✨ Deployment complete!"
