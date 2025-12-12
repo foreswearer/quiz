@@ -136,7 +136,23 @@ def create_random_test(req: RandomTestRequest):
                 return {"error": f"course with code {req.course_code} not found"}
             course_id, course_name = crow
 
-            n = max(1, req.num_questions)
+            # Get the user who is creating the test
+            user = get_user_by_dni(cur, req.student_dni)
+            if user is None:
+                return {"error": f"user with DNI {req.student_dni} not found"}
+            user_id = user["id"]
+
+            # Get available questions count and cap requested number
+            cur.execute(
+                "SELECT COUNT(*) FROM question_bank WHERE course_id = %s",
+                (course_id,),
+            )
+            available_questions = cur.fetchone()[0] or 0
+
+            if available_questions == 0:
+                return {"error": f"no questions available for course {req.course_code}"}
+
+            n = min(max(1, req.num_questions), available_questions)
 
             title = f"Random {n} – created by {req.student_dni}"
             description = (
@@ -146,11 +162,11 @@ def create_random_test(req: RandomTestRequest):
 
             cur.execute(
                 """
-                INSERT INTO test (course_id, title, description, total_points)
-                VALUES (%s, %s, %s, NULL)
+                INSERT INTO test (course_id, title, description, total_points, created_by)
+                VALUES (%s, %s, %s, NULL, %s)
                 RETURNING id
                 """,
-                (course_id, title, description),
+                (course_id, title, description, user_id),
             )
             test_id = cur.fetchone()[0]
 
@@ -203,24 +219,41 @@ def create_random_test(req: RandomTestRequest):
 @router.delete("/tests/{test_id}")
 def delete_test(
     test_id: int,
-    teacher_dni: str = Query(..., description="Teacher DNI (must have role='teacher')"),
+    dni: str = Query(
+        ...,
+        description="User DNI (teacher can delete any, students can delete their own)",
+    ),
 ):
     """
     Delete a test and ALL associated results.
-    Requires a teacher DNI.
+    Teachers can delete any test.
+    Students and power_students can delete tests they created.
     """
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            user = get_user_by_dni(cur, teacher_dni)
+            user = get_user_by_dni(cur, dni)
             if user is None:
-                return {"error": f"user with DNI {teacher_dni} not found"}
-            if user["role"] != "teacher":
-                return {"error": f"DNI {teacher_dni} is not a teacher"}
+                return {"error": f"user with DNI {dni} not found"}
 
             test = get_test_info(cur, test_id)
             if test is None:
                 return {"error": f"test {test_id} not found"}
+
+            # Get test details including creator
+            cur.execute(
+                "SELECT created_by FROM test WHERE id = %s",
+                (test_id,),
+            )
+            test_row = cur.fetchone()
+            test_created_by = test_row[0] if test_row else None
+
+            # Authorization check
+            is_teacher = user["role"] == "teacher"
+            is_owner = test_created_by == user["id"]
+
+            if not is_teacher and not is_owner:
+                return {"error": "you can only delete tests you created"}
             test_title = test["title"]
 
             cur.execute(
@@ -301,5 +334,104 @@ def rename_test(test_id: int, data: dict):
             conn.commit()
 
             return {"message": f"Test renamed to '{title.strip()}'"}
+    finally:
+        conn.close()
+
+
+@router.post("/attempts/{attempt_id}/study_mode")
+def create_study_mode_test(
+    attempt_id: int,
+    dni: str = Query(..., description="Student DNI"),
+):
+    """
+    Create a study mode test containing only the questions that were answered incorrectly
+    in the given attempt.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # Verify user
+            user = get_user_by_dni(cur, dni)
+            if user is None:
+                return {"error": f"user with DNI {dni} not found"}
+
+            # Get attempt info
+            cur.execute(
+                """
+                SELECT ta.test_id, ta.student_id, t.course_id, t.title
+                FROM test_attempt ta
+                JOIN test t ON t.id = ta.test_id
+                WHERE ta.id = %s
+                """,
+                (attempt_id,),
+            )
+            attempt_row = cur.fetchone()
+            if attempt_row is None:
+                return {"error": f"attempt {attempt_id} not found"}
+
+            original_test_id, student_id, course_id, original_title = attempt_row
+
+            # Verify this is the student's attempt
+            if student_id != user["id"]:
+                return {"error": "you can only create study mode for your own attempts"}
+
+            # Get questions answered incorrectly
+            cur.execute(
+                """
+                SELECT DISTINCT sa.question_id, qb.default_points
+                FROM student_answer sa
+                JOIN question_bank qb ON qb.id = sa.question_id
+                WHERE sa.attempt_id = %s AND sa.is_correct = FALSE
+                ORDER BY sa.question_id
+                """,
+                (attempt_id,),
+            )
+            wrong_questions = cur.fetchall()
+
+            if not wrong_questions:
+                return {
+                    "error": "no incorrect answers found - you got everything right!"
+                }
+
+            # Create new test
+            title = f"Study Mode: {original_title}"
+            description = (
+                f"Practice test with {len(wrong_questions)} questions you got wrong"
+            )
+
+            cur.execute(
+                """
+                INSERT INTO test (course_id, title, description, total_points, created_by)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    course_id,
+                    title,
+                    description,
+                    sum(points for _, points in wrong_questions),
+                    user["id"],
+                ),
+            )
+            new_test_id = cur.fetchone()[0]
+
+            # Insert questions
+            for idx, (question_id, points) in enumerate(wrong_questions, 1):
+                cur.execute(
+                    """
+                    INSERT INTO test_question (test_id, question_id, order_index, points)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (new_test_id, question_id, idx, points),
+                )
+
+            conn.commit()
+
+            return {
+                "test_id": new_test_id,
+                "title": title,
+                "description": description,
+                "num_questions": len(wrong_questions),
+            }
     finally:
         conn.close()
