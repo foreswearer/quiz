@@ -838,7 +838,7 @@
         }
         try {
             const resp = await fetch(
-                `/tests/${encodeURIComponent(testId)}?teacher_dni=${encodeURIComponent(currentDni)}`,
+                `/tests/${encodeURIComponent(testId)}?dni=${encodeURIComponent(currentDni)}`,
                 { method: "DELETE" }
             );
             dbg("delete_test response status", resp.status);
