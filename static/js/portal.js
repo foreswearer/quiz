@@ -271,17 +271,17 @@
                 ? new Date(a.submitted_at).toLocaleString()
                 : "-";
 
-            // Build actions column
-            let actionsHtml = '<div style="display: flex; gap: 0.5rem;">';
+            // Build actions column - compact icon buttons
+            let actionsHtml = '<div style="display: flex; gap: 0.25rem; justify-content: center;">';
 
             // Study mode button for failed attempts (percentage < 70%)
             if (a.status === "graded" && a.percentage != null && a.percentage < 70) {
-                actionsHtml += `<button class="study-mode-btn" data-attempt-id="${a.attempt_id}" data-test-title="${a.test_title || 'N/A'}">📚 Study</button>`;
+                actionsHtml += `<button class="study-mode-btn" data-attempt-id="${a.attempt_id}" data-test-title="${a.test_title || 'N/A'}" title="Study Mode" style="padding: 0.3rem 0.6rem; font-size: 1.2rem; min-width: unset;">📚</button>`;
             }
 
             // Delete button for tests created by student
             if (a.can_delete) {
-                actionsHtml += `<button class="delete-test-btn" data-test-id="${a.test_id}" data-test-title="${a.test_title || 'N/A'}">🗑️ Delete</button>`;
+                actionsHtml += `<button class="delete-test-btn" data-test-id="${a.test_id}" data-test-title="${a.test_title || 'N/A'}" title="Delete Test" style="padding: 0.3rem 0.6rem; font-size: 1.2rem; min-width: unset;">🗑️</button>`;
             }
 
             actionsHtml += '</div>';
