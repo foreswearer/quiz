@@ -535,3 +535,114 @@ def delete_question(question_id: int):
             }
     finally:
         conn.close()
+
+
+@router.post("/api/question-bank/upload")
+def upload_questions_from_json(data: dict):
+    """
+    Upload multiple questions from JSON format.
+
+    Expected JSON format:
+    {
+        "course_code": "2526-45810-A",
+        "questions": [
+            {
+                "question_text": "What is...",
+                "question_type": "single_choice",  (optional, defaults to "single_choice")
+                "default_points": 0.5,  (optional, defaults to 0.5)
+                "options": [
+                    {"text": "Option A", "is_correct": false},
+                    {"text": "Option B", "is_correct": true},
+                    {"text": "Option C", "is_correct": false}
+                ]
+            }
+        ]
+    }
+    """
+    course_code = data.get("course_code", "").strip()
+    questions = data.get("questions", [])
+
+    if not course_code:
+        return {"error": "course_code is required"}
+
+    if not questions or not isinstance(questions, list):
+        return {"error": "questions array is required"}
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # Check course exists
+            cur.execute("SELECT id, name FROM course WHERE code = %s", (course_code,))
+            row = cur.fetchone()
+            if not row:
+                return {"error": f"Course with code '{course_code}' not found"}
+
+            course_id, course_name = row
+
+            created_count = 0
+            errors = []
+
+            for idx, q_data in enumerate(questions):
+                question_text = q_data.get("question_text", "").strip()
+                question_type = q_data.get("question_type", "single_choice")
+                default_points = q_data.get("default_points", 0.5)
+                options = q_data.get("options", [])
+
+                # Validate question
+                if not question_text:
+                    errors.append(
+                        f"Question {idx + 1}: question_text is required"
+                    )
+                    continue
+
+                if not options or len(options) < 2:
+                    errors.append(
+                        f"Question {idx + 1}: At least 2 options are required"
+                    )
+                    continue
+
+                has_correct = any(o.get("is_correct") for o in options)
+                if not has_correct:
+                    errors.append(
+                        f"Question {idx + 1}: At least one option must be correct"
+                    )
+                    continue
+
+                # Insert question
+                cur.execute(
+                    """
+                    INSERT INTO question_bank (course_id, question_text, question_type, default_points)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id
+                    """,
+                    (course_id, question_text, question_type, default_points),
+                )
+                question_id = cur.fetchone()[0]
+
+                # Insert options
+                for opt_idx, opt in enumerate(options):
+                    cur.execute(
+                        """
+                        INSERT INTO question_option (question_id, option_text, is_correct, order_index)
+                        VALUES (%s, %s, %s, %s)
+                        """,
+                        (
+                            question_id,
+                            opt.get("text", "").strip(),
+                            bool(opt.get("is_correct", False)),
+                            opt_idx + 1,
+                        ),
+                    )
+
+                created_count += 1
+
+            conn.commit()
+
+            return {
+                "message": f"Successfully uploaded {created_count} question(s) to course '{course_name}'",
+                "course_code": course_code,
+                "created_count": created_count,
+                "errors": errors if errors else None,
+            }
+    finally:
+        conn.close()

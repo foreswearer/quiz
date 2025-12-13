@@ -154,7 +154,12 @@ def create_random_test(req: RandomTestRequest):
 
             n = min(max(1, req.num_questions), available_questions)
 
-            title = f"Random {n} – created by {req.student_dni}"
+            # Use custom title if provided, otherwise use default
+            if req.title and req.title.strip():
+                title = req.title.strip()
+            else:
+                title = f"Random {n} – created by {req.student_dni}"
+
             description = (
                 f"Random {n}-question test from course "
                 f"{req.course_code} ({course_name})."

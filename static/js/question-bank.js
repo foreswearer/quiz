@@ -101,6 +101,10 @@
     const btnCancelCourse = document.getElementById("btn-cancel-course");
     const courseFormError = document.getElementById("course-form-error");
 
+    const jsonFileInput = document.getElementById("json-file");
+    const btnUploadJson = document.getElementById("btn-upload-json");
+    const uploadResult = document.getElementById("upload-result");
+
     const questionsEmpty = document.getElementById("questions-empty");
     const questionsLoading = document.getElementById("questions-loading");
     const questionsTableWrapper = document.getElementById("questions-table-wrapper");
@@ -538,6 +542,8 @@
             const value = courseSelect.value;
             selectedCourseId = value ? parseInt(value, 10) : null;
             btnAddQuestion.disabled = !selectedCourseId;
+            jsonFileInput.disabled = !selectedCourseId;
+            btnUploadJson.disabled = !selectedCourseId;
             closeQuestionEditor();
             await loadQuestions();
         });
@@ -597,6 +603,81 @@
         // Cancel course
         btnCancelCourse.addEventListener("click", () => {
             newCourseForm.classList.add("hidden");
+        });
+
+        // Upload JSON button
+        btnUploadJson.addEventListener("click", async () => {
+            const file = jsonFileInput.files[0];
+            if (!file) {
+                uploadResult.textContent = "Please select a JSON file first";
+                uploadResult.style.color = "var(--error)";
+                return;
+            }
+
+            if (!selectedCourseId) {
+                uploadResult.textContent = "Please select a course first";
+                uploadResult.style.color = "var(--error)";
+                return;
+            }
+
+            try {
+                btnUploadJson.disabled = true;
+                btnUploadJson.textContent = "Uploading...";
+                uploadResult.textContent = "Reading file...";
+                uploadResult.style.color = "var(--text-muted)";
+
+                // Read file content
+                const content = await file.text();
+                const jsonData = JSON.parse(content);
+
+                // Get the selected course code
+                const selectedCourse = courses.find(c => c.id === selectedCourseId);
+                if (!selectedCourse) {
+                    uploadResult.textContent = "Selected course not found";
+                    uploadResult.style.color = "var(--error)";
+                    return;
+                }
+
+                // Set the course code in the JSON data
+                jsonData.course_code = selectedCourse.code;
+
+                uploadResult.textContent = "Uploading questions...";
+
+                // Upload to API
+                const resp = await fetch("/api/question-bank/upload", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(jsonData)
+                });
+
+                const result = await resp.json();
+
+                if (result.error) {
+                    uploadResult.textContent = result.error;
+                    uploadResult.style.color = "var(--error)";
+                    return;
+                }
+
+                let message = result.message;
+                if (result.errors && result.errors.length > 0) {
+                    message += "\n\nWarnings:\n" + result.errors.join("\n");
+                }
+
+                uploadResult.textContent = message;
+                uploadResult.style.color = "var(--success)";
+
+                // Clear file input and reload questions
+                jsonFileInput.value = "";
+                await loadQuestions();
+
+            } catch (e) {
+                uploadResult.textContent = "Error: " + e.message;
+                uploadResult.style.color = "var(--error)";
+                dbg("Upload error:", e);
+            } finally {
+                btnUploadJson.disabled = false;
+                btnUploadJson.textContent = "📤 Upload Questions";
+            }
         });
 
         // Add question
