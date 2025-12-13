@@ -28,14 +28,13 @@ h2 {
 
 .toolbar-buttons {
     display: flex;
+    flex-direction: column;
     gap: 0.4rem;
     align-items: stretch;
 }
 
 .toolbar-buttons .toolbar-btn,
 .toolbar-buttons .theme-toggle {
-    flex: 1 1 0;
-    min-width: 0;
     width: 100%;
 }
 
