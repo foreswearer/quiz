@@ -578,9 +578,10 @@
             }
 
             // Extract academic year from first 4 characters of code
-            const year = parseInt(code.substring(0, 4), 10);
-            if (!year || year < 2020 || year > 2099) {
-                courseFormError.textContent = "Course code must start with a valid academic year (2020-2099)";
+            const yearStr = code.substring(0, 4);
+            const year = parseInt(yearStr, 10);
+            if (isNaN(year) || yearStr.length !== 4) {
+                courseFormError.textContent = "Course code must start with 4 digits (e.g., 2526-45810-A)";
                 return;
             }
 
