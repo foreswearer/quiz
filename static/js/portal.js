@@ -173,6 +173,8 @@
     let currentRole = null;
     let attemptsChart = null;
     let selectedCourseId = null;
+    let selectedCourse = null;
+    let allCourses = [];
     let allTests = [];
 
     function showError(msg) {
@@ -256,13 +258,14 @@
 
     function filterAndPopulateTests() {
         dbg("filterAndPopulateTests() for course", selectedCourseId);
-        let filteredTests = allTests;
 
-        // Filter by selected course if one is selected
-        if (selectedCourseId) {
-            filteredTests = allTests.filter(t => t.course_id === selectedCourseId);
+        // Only show tests when a course is selected
+        if (!selectedCourseId) {
+            populateTestsSelect([]);
+            return;
         }
 
+        const filteredTests = allTests.filter(t => t.course_id === selectedCourseId);
         populateTestsSelect(filteredTests);
     }
 
@@ -459,8 +462,8 @@
 
             // Fetch courses
             const coursesData = await fetchCourses();
-            const courses = coursesData.courses || [];
-            populateCoursesSelect(courses);
+            allCourses = coursesData.courses || [];
+            populateCoursesSelect(allCourses);
 
             // Fetch tests
             const testsData = await fetchAvailableTests();
@@ -550,7 +553,8 @@
     courseSelect.addEventListener("change", function () {
         const value = courseSelect.value;
         selectedCourseId = value ? parseInt(value, 10) : null;
-        dbg("Course selected:", selectedCourseId);
+        selectedCourse = selectedCourseId ? allCourses.find(c => c.id === selectedCourseId) : null;
+        dbg("Course selected:", selectedCourseId, selectedCourse);
         filterAndPopulateTests();
     });
 
@@ -579,7 +583,7 @@
         const numQuestions = parseInt(numQuestionsInput.value, 10);
         const testName = testNameInput ? testNameInput.value.trim() : "";
         const maxAttempts = maxAttemptsInput ? parseInt(maxAttemptsInput.value, 10) : null;
-        
+
         dbg("Create random test clicked, numQuestions=", numQuestions, "testName=", testName, "maxAttempts=", maxAttempts);
         if (isNaN(numQuestions) || numQuestions < 1) {
             randomInfo.textContent = "Enter a valid number of questions (>=1).";
@@ -589,10 +593,15 @@
             randomInfo.textContent = "Load your dashboard first.";
             return;
         }
+        if (!selectedCourse) {
+            randomInfo.textContent = "Select a course first.";
+            return;
+        }
 
         try {
             const payload = {
                 student_dni: currentDni,
+                course_code: selectedCourse.code,
                 num_questions: numQuestions,
             };
             // Add title only if provided
