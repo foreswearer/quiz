@@ -609,6 +609,8 @@
                 courseSelect.value = result.course.id;
                 selectedCourseId = result.course.id;
                 btnAddQuestion.disabled = false;
+                jsonFileInput.disabled = false;
+                btnUploadJson.disabled = false;
                 newCourseForm.classList.add("hidden");
                 await loadQuestions();
             } catch (e) {
