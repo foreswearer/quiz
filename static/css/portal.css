@@ -33,8 +33,8 @@ h2 {
 }
 
 .toolbar-buttons > button {
-    min-width: 120px;
-    width: 120px;
+    flex: 1;
+    min-width: 110px;
 }
 
 label {
@@ -115,4 +115,16 @@ th {
 #random-info {
     margin-top: 0.4rem;
     font-size: 0.9rem;
+}
+
+/* Dark mode for course select */
+body.dark #course-select {
+    background-color: #020617;
+    color: #93c5fd;
+    border-color: #1f2937;
+}
+
+body.dark #course-select option {
+    background-color: #020617;
+    color: #93c5fd;
 }
