@@ -176,6 +176,7 @@
     let selectedCourse = null;
     let allCourses = [];
     let allTests = [];
+    let allAttempts = [];
 
     function showError(msg) {
         errorDiv.textContent = msg;
@@ -267,6 +268,26 @@
 
         const filteredTests = allTests.filter(t => t.course_id === selectedCourseId);
         populateTestsSelect(filteredTests);
+    }
+
+    function filterAndRenderAttempts() {
+        dbg("filterAndRenderAttempts() for course", selectedCourseId);
+
+        // Filter to only graded attempts
+        const gradedAttempts = allAttempts.filter(a => a.status === 'graded');
+
+        // If a course is selected, filter by course
+        let filteredAttempts = gradedAttempts;
+        if (selectedCourseId) {
+            // Filter attempts by matching test_id with tests from selected course
+            const courseTestIds = new Set(
+                allTests.filter(t => t.course_id === selectedCourseId).map(t => t.id)
+            );
+            filteredAttempts = gradedAttempts.filter(a => courseTestIds.has(a.test_id));
+        }
+
+        renderAttemptsTable(filteredAttempts);
+        renderAttemptsChart(filteredAttempts);
     }
 
     function populateTestsSelect(tests) {
@@ -478,17 +499,13 @@
                 return;
             }
 
-            const attempts = attemptsData.attempts || [];
-            
-            // Filter: only show graded attempts (not in_progress)
-            const gradedAttempts = attempts.filter(a => a.status === 'graded');
-            
-            renderAttemptsTable(gradedAttempts);
-            renderAttemptsChart(gradedAttempts);
+            allAttempts = attemptsData.attempts || [];
+
+            filterAndRenderAttempts();
 
             // Check role from first attempt (if any)
             currentRole = null;
-            if (attempts.length > 0) {
+            if (allAttempts.length > 0) {
                 // We don't have role in attempts, need to get from user
                 // For now, check if DNI matches teacher pattern
                 // Better: fetch user info from a /user/{dni} endpoint
@@ -556,6 +573,7 @@
         selectedCourse = selectedCourseId ? allCourses.find(c => c.id === selectedCourseId) : null;
         dbg("Course selected:", selectedCourseId, selectedCourse);
         filterAndPopulateTests();
+        filterAndRenderAttempts();
     });
 
     // ---------- Start selected test ----------
