@@ -138,6 +138,7 @@
     const errorDiv = document.getElementById("error");
     const dashboard = document.getElementById("dashboard");
     const studentInfo = document.getElementById("student-info");
+    const courseSelect = document.getElementById("course-select");
     const testSelect = document.getElementById("test-select");
     const startSelectedBtn = document.getElementById("start-selected-test");
     const testNameInput = document.getElementById("test-name");
@@ -171,6 +172,8 @@
     let currentDni = null;
     let currentRole = null;
     let attemptsChart = null;
+    let selectedCourseId = null;
+    let allTests = [];
 
     function showError(msg) {
         errorDiv.textContent = msg;
@@ -178,6 +181,20 @@
     }
 
     // ---------- API helpers ----------
+    async function fetchCourses() {
+        dbg("fetchCourses() start");
+        const resp = await fetch("/courses");
+        dbg("fetchCourses() status", resp.status);
+        if (!resp.ok) {
+            const txt = await resp.text();
+            dbg("fetchCourses() error body:", txt);
+            throw new Error("Error fetching courses: " + txt);
+        }
+        const data = await resp.json();
+        dbg("fetchCourses() data:", data);
+        return data;
+    }
+
     async function fetchAvailableTests() {
         dbg("fetchAvailableTests() start");
         const resp = await fetch("/available_tests");
@@ -221,6 +238,34 @@
     }
 
     // ---------- UI helpers ----------
+    function populateCoursesSelect(courses) {
+        dbg("populateCoursesSelect() with", courses ? courses.length : 0, "courses");
+        courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+        if (!courses || courses.length === 0) {
+            courseSelect.disabled = true;
+            return;
+        }
+        courseSelect.disabled = false;
+        courses.forEach((c) => {
+            const opt = document.createElement("option");
+            opt.value = String(c.id);
+            opt.textContent = `${c.code} - ${c.name}`;
+            courseSelect.appendChild(opt);
+        });
+    }
+
+    function filterAndPopulateTests() {
+        dbg("filterAndPopulateTests() for course", selectedCourseId);
+        let filteredTests = allTests;
+
+        // Filter by selected course if one is selected
+        if (selectedCourseId) {
+            filteredTests = allTests.filter(t => t.course_id === selectedCourseId);
+        }
+
+        populateTestsSelect(filteredTests);
+    }
+
     function populateTestsSelect(tests) {
         dbg("populateTestsSelect() with", tests ? tests.length : 0, "tests");
         testSelect.innerHTML = "";
@@ -412,11 +457,16 @@
             setCookie("quiz_dni", dni, 7);
             currentDni = dni;
 
+            // Fetch courses
+            const coursesData = await fetchCourses();
+            const courses = coursesData.courses || [];
+            populateCoursesSelect(courses);
+
             // Fetch tests
             const testsData = await fetchAvailableTests();
-            let tests = testsData.tests || [];
+            allTests = testsData.tests || [];
 
-            populateTestsSelect(tests);
+            filterAndPopulateTests();
 
             // Fetch attempts
             const attemptsData = await fetchStudentAttempts(dni);
@@ -494,6 +544,14 @@
             dbg("loadDashboard exception", e);
             showError("Error loading dashboard: " + e.message);
         }
+    });
+
+    // ---------- Course select change ----------
+    courseSelect.addEventListener("change", function () {
+        const value = courseSelect.value;
+        selectedCourseId = value ? parseInt(value, 10) : null;
+        dbg("Course selected:", selectedCourseId);
+        filterAndPopulateTests();
     });
 
     // ---------- Start selected test ----------

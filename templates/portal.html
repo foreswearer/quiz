@@ -14,9 +14,14 @@
         <!-- Toolbar -->
         <div class="toolbar">
             <div>
-                <h1>📚 Cloud Digital Leader Quiz</h1>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <h1>📚 Course:</h1>
+                    <select id="course-select" style="font-size: 1.5rem; padding: 0.5rem; border-radius: 4px; background: var(--bg-secondary); color: var(--text); border: 1px solid var(--border);">
+                        <option value="">-- Select Course --</option>
+                    </select>
+                </div>
                 <p class="subtitle small">
-                    Practice for the Google Cloud certification
+                    Select a course and practice with tests
                     <span id="active-users-count" style="margin-left: 1rem; color: var(--primary);"></span>
                 </p>
             </div>
