@@ -111,10 +111,7 @@
         if (dashboardBtn) {
             dashboardBtn.classList.add("hidden");
         }
-        // Hide rename button and info
-        if (renameMyTestBtn) {
-            renameMyTestBtn.classList.add("hidden");
-        }
+        // Clear rename info
         if (renameInfo) {
             renameInfo.textContent = "";
         }
@@ -158,7 +155,6 @@
     const podiumInfo = document.getElementById("podium-info");
 
     // Rename button for all users (to rename their own tests)
-    const renameMyTestBtn = document.getElementById("rename-my-test-btn");
     const renameInfo = document.getElementById("rename-info");
 
     const teacherPanel = document.getElementById("teacher-panel");
@@ -451,10 +447,6 @@
                 loginCard.classList.add("hidden");
             }
 
-            // Show rename button for all logged-in users
-            if (renameMyTestBtn) {
-                renameMyTestBtn.classList.remove("hidden");
-            }
 
             // Infer role: if DNI matches known teacher pattern, show teacher panel
             // For demo: check if this is a teacher by attempting to fetch teacher dashboard
@@ -614,58 +606,6 @@
         }
     });
 
-    // ---------- Rename test (for all users - can rename their own tests) ----------
-    if (renameMyTestBtn) {
-        renameMyTestBtn.addEventListener("click", async function () {
-            if (renameInfo) renameInfo.textContent = "";
-            
-            const testId = testSelect.value;
-            dbg("Rename my test clicked, testId=", testId);
-            
-            if (!testId) {
-                if (renameInfo) renameInfo.textContent = "Select a test first.";
-                return;
-            }
-            if (!currentDni) {
-                if (renameInfo) renameInfo.textContent = "Load your dashboard first.";
-                return;
-            }
-
-            const newTitle = prompt("Enter new name for this test:");
-            if (!newTitle || !newTitle.trim()) {
-                return; // Cancelled or empty
-            }
-
-            try {
-                const resp = await fetch(`/tests/${encodeURIComponent(testId)}`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        title: newTitle.trim(),
-                        user_dni: currentDni
-                    }),
-                });
-                dbg("rename_test response status", resp.status);
-                if (!resp.ok) {
-                    const txt = await resp.text();
-                    if (renameInfo) renameInfo.textContent = "Error: " + txt;
-                    return;
-                }
-                const data = await resp.json();
-                if (data.error) {
-                    if (renameInfo) renameInfo.textContent = data.error;
-                    return;
-                }
-                if (renameInfo) renameInfo.textContent = data.message || "Test renamed!";
-
-                // Refresh tests list
-                loadDashboardBtn.click();
-            } catch (e) {
-                dbg("rename_test exception", e);
-                if (renameInfo) renameInfo.textContent = "Error: " + e;
-            }
-        });
-    }
 
     // Teacher: open question bank
     if (btnQuestionBank) {
@@ -864,21 +804,23 @@
         }
     });
 
-    // Teacher: rename test (in teacher panel - can rename ANY test)
+    // Rename test (for all users)
     renameTestBtn.addEventListener("click", async function () {
-        deleteTestInfo.textContent = "";
-        dbg("Rename test button clicked (teacher panel), role=", currentRole);
-        if (currentRole !== "teacher") {
-            deleteTestInfo.textContent = "Only teachers can use this panel.";
+        if (renameInfo) renameInfo.textContent = "";
+
+        const testId = testSelect.value;
+        dbg("Rename test clicked, testId=", testId);
+
+        if (!testId) {
+            if (renameInfo) renameInfo.textContent = "Select a test first.";
             return;
         }
-        const testId = testSelect.value;
-        if (!testId) {
-            deleteTestInfo.textContent = "Select a test first.";
+        if (!currentDni) {
+            if (renameInfo) renameInfo.textContent = "Load your dashboard first.";
             return;
         }
 
-        const newTitle = prompt("Enter new title for this test:");
+        const newTitle = prompt("Enter new name for this test:");
         if (!newTitle || !newTitle.trim()) {
             return; // Cancelled or empty
         }
@@ -889,27 +831,27 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     title: newTitle.trim(),
-                    teacher_dni: currentDni
+                    user_dni: currentDni
                 }),
             });
             dbg("rename_test response status", resp.status);
             if (!resp.ok) {
                 const txt = await resp.text();
-                deleteTestInfo.textContent = "Error renaming test: " + txt;
+                if (renameInfo) renameInfo.textContent = "Error: " + txt;
                 return;
             }
             const data = await resp.json();
             if (data.error) {
-                deleteTestInfo.textContent = data.error;
+                if (renameInfo) renameInfo.textContent = data.error;
                 return;
             }
-            deleteTestInfo.textContent = data.message || "Test renamed successfully.";
+            if (renameInfo) renameInfo.textContent = data.message || "Test renamed!";
 
             // Refresh tests list
             loadDashboardBtn.click();
         } catch (e) {
             dbg("rename_test exception", e);
-            deleteTestInfo.textContent = "Error renaming test: " + e;
+            if (renameInfo) renameInfo.textContent = "Error: " + e;
         }
     });
 

@@ -54,8 +54,6 @@
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
                     <button type="button" id="btn-question-bank">📚 Manage Questions</button>
                     <button type="button" id="manage-users-btn">👥 Manage Users</button>
-                    <button type="button" id="delete-test-btn">🗑️ Delete Test</button>
-                    <button type="button" id="rename-test-btn">✏️ Rename Test</button>
                     <button type="button" id="load-analytics-btn">📊 Show Analytics</button>
                 </div>
 
@@ -64,7 +62,6 @@
                     <div id="users-list" style="margin-top: 1rem;"></div>
                 </div>
 
-                <div id="delete-test-info" style="margin-top: 0.5rem;"></div>
                 <div id="analytics-output" style="margin-top: 0.5rem;"></div>
             </div>
 
@@ -72,20 +69,22 @@
                 <!-- Left Column: Take a Test -->
                 <div class="card">
                     <h2>📝 Take a Test</h2>
-                    
+
                     <label for="test-select">Select Test:</label>
                     <select id="test-select">
                         <option value="">Loading...</option>
                     </select>
-                    
-                    <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        <button type="button" id="start-selected-test">▶️ Start Test</button>
-                        <button type="button" id="view-podium-btn">🏆 View Podium</button>
-                        <button type="button" id="rename-my-test-btn" class="hidden">✏️ Rename Test</button>
+
+                    <div style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                        <button type="button" id="start-selected-test" style="width: 100%;">▶️ Start Test</button>
+                        <button type="button" id="view-podium-btn" style="width: 100%;">🏆 View Podium</button>
+                        <button type="button" id="rename-test-btn" style="width: 100%;">✏️ Rename Test</button>
+                        <button type="button" id="delete-test-btn" style="width: 100%;">🗑️ Delete Test</button>
                     </div>
-                    
+
                     <div id="podium-info" style="margin-top: 0.5rem;"></div>
                     <div id="rename-info" style="margin-top: 0.5rem;"></div>
+                    <div id="delete-test-info" style="margin-top: 0.5rem;"></div>
 
                     <h3 style="margin-top: 1.2rem;">🎲 Create Random Test</h3>
                     
