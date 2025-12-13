@@ -177,25 +177,19 @@ def create_random_test(req: RandomTestRequest):
 
             cur.execute(
                 """
-                WITH q AS (
-                    SELECT
-                        qb.id AS question_id,
-                        row_number() OVER (ORDER BY random()) AS rn
-                    FROM question_bank qb
-                    WHERE qb.course_id = %s
-                )
                 INSERT INTO test_question (test_id, question_id, order_index, points)
                 SELECT
                     %s AS test_id,
-                    q.question_id,
-                    q.rn AS order_index,
+                    qb.id AS question_id,
+                    row_number() OVER () AS order_index,
                     qb.default_points
-                FROM q
-                JOIN question_bank qb ON qb.id = q.question_id
-                WHERE q.rn <= %s
+                FROM question_bank qb
+                WHERE qb.course_id = %s
+                ORDER BY random()
+                LIMIT %s
                 RETURNING question_id
                 """,
-                (course_id, test_id, n),
+                (test_id, course_id, n),
             )
             inserted_questions = cur.fetchall()
             actual_n = len(inserted_questions)
