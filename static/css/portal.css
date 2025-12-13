@@ -28,8 +28,14 @@ h2 {
 
 .toolbar-buttons {
     display: flex;
+    flex-direction: column;
     gap: 0.4rem;
-    align-items: center;
+    align-items: stretch;
+}
+
+.toolbar-buttons .toolbar-btn,
+.toolbar-buttons .theme-toggle {
+    width: 100%;
 }
 
 label {
@@ -47,6 +53,24 @@ select {
     border: 1px solid var(--border-color);
     background-color: var(--card-bg);
     color: var(--text-color);
+}
+
+#course-select {
+    font-size: 1.5rem;
+    padding: 0.5rem;
+    border-radius: 4px;
+    background-color: var(--bg-card);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    max-width: none;
+    width: auto;
+    min-width: 300px;
+}
+
+#course-select option {
+    background-color: var(--bg-card);
+    color: var(--text-color);
+    padding: 0.5rem;
 }
 
 input:focus,
@@ -92,4 +116,16 @@ th {
 #random-info {
     margin-top: 0.4rem;
     font-size: 0.9rem;
+}
+
+/* Dark mode for course select */
+body.dark #course-select {
+    background-color: #020617;
+    color: #93c5fd;
+    border-color: #1f2937;
+}
+
+body.dark #course-select option {
+    background-color: #020617;
+    color: #93c5fd;
 }

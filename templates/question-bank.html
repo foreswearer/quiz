@@ -66,6 +66,53 @@
                 </div>
             </div>
 
+            <!-- JSON Upload Section -->
+            <div class="card">
+                <h2>📤 Upload Questions from JSON</h2>
+                <p class="small">Upload multiple questions at once using a JSON file.</p>
+
+                <div class="form-row">
+                    <label for="json-file">Select JSON File:</label>
+                    <input type="file" id="json-file" accept=".json" disabled>
+                </div>
+
+                <div class="form-row">
+                    <label style="display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="checkbox" id="replace-questions">
+                        <span>Replace all existing questions in this course</span>
+                    </label>
+                    <p class="small" style="margin-left: 1.8rem; color: var(--text-muted);">
+                        If unchecked, questions will be added to existing ones.
+                    </p>
+                </div>
+
+                <div class="form-actions">
+                    <button id="btn-upload-json" type="button" disabled>📤 Upload Questions</button>
+                </div>
+
+                <div id="upload-result" class="form-result"></div>
+
+                <details style="margin-top: 1rem;">
+                    <summary style="cursor: pointer; color: var(--primary);">📋 JSON Format Example</summary>
+                    <pre style="background: var(--bg-secondary); padding: 1rem; border-radius: 4px; overflow-x: auto; margin-top: 0.5rem;"><code>{
+  "course_code": "2526-45810-A",
+  "questions": [
+    {
+      "question_text": "What is Google Cloud Platform?",
+      "question_type": "single_choice",
+      "default_points": 0.5,
+      "options": [
+        {"text": "A cloud storage service", "is_correct": false},
+        {"text": "A cloud computing platform", "is_correct": true},
+        {"text": "A database system", "is_correct": false},
+        {"text": "An operating system", "is_correct": false}
+      ]
+    }
+  ]
+}</code></pre>
+                </details>
+            </div>
+
             <!-- Questions List -->
             <div class="card">
                 <div class="card-header">

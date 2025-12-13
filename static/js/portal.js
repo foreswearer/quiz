@@ -111,10 +111,7 @@
         if (dashboardBtn) {
             dashboardBtn.classList.add("hidden");
         }
-        // Hide rename button and info
-        if (renameMyTestBtn) {
-            renameMyTestBtn.classList.add("hidden");
-        }
+        // Clear rename info
         if (renameInfo) {
             renameInfo.textContent = "";
         }
@@ -141,6 +138,7 @@
     const errorDiv = document.getElementById("error");
     const dashboard = document.getElementById("dashboard");
     const studentInfo = document.getElementById("student-info");
+    const courseSelect = document.getElementById("course-select");
     const testSelect = document.getElementById("test-select");
     const startSelectedBtn = document.getElementById("start-selected-test");
     const testNameInput = document.getElementById("test-name");
@@ -158,7 +156,6 @@
     const podiumInfo = document.getElementById("podium-info");
 
     // Rename button for all users (to rename their own tests)
-    const renameMyTestBtn = document.getElementById("rename-my-test-btn");
     const renameInfo = document.getElementById("rename-info");
 
     const teacherPanel = document.getElementById("teacher-panel");
@@ -175,6 +172,11 @@
     let currentDni = null;
     let currentRole = null;
     let attemptsChart = null;
+    let selectedCourseId = null;
+    let selectedCourse = null;
+    let allCourses = [];
+    let allTests = [];
+    let allAttempts = [];
 
     function showError(msg) {
         errorDiv.textContent = msg;
@@ -182,6 +184,20 @@
     }
 
     // ---------- API helpers ----------
+    async function fetchCourses() {
+        dbg("fetchCourses() start");
+        const resp = await fetch("/courses");
+        dbg("fetchCourses() status", resp.status);
+        if (!resp.ok) {
+            const txt = await resp.text();
+            dbg("fetchCourses() error body:", txt);
+            throw new Error("Error fetching courses: " + txt);
+        }
+        const data = await resp.json();
+        dbg("fetchCourses() data:", data);
+        return data;
+    }
+
     async function fetchAvailableTests() {
         dbg("fetchAvailableTests() start");
         const resp = await fetch("/available_tests");
@@ -225,6 +241,55 @@
     }
 
     // ---------- UI helpers ----------
+    function populateCoursesSelect(courses) {
+        dbg("populateCoursesSelect() with", courses ? courses.length : 0, "courses");
+        courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+        if (!courses || courses.length === 0) {
+            courseSelect.disabled = true;
+            return;
+        }
+        courseSelect.disabled = false;
+        courses.forEach((c) => {
+            const opt = document.createElement("option");
+            opt.value = String(c.id);
+            opt.textContent = `${c.code} - ${c.name}`;
+            courseSelect.appendChild(opt);
+        });
+    }
+
+    function filterAndPopulateTests() {
+        dbg("filterAndPopulateTests() for course", selectedCourseId);
+
+        // Only show tests when a course is selected
+        if (!selectedCourseId) {
+            populateTestsSelect([]);
+            return;
+        }
+
+        const filteredTests = allTests.filter(t => t.course_id === selectedCourseId);
+        populateTestsSelect(filteredTests);
+    }
+
+    function filterAndRenderAttempts() {
+        dbg("filterAndRenderAttempts() for course", selectedCourseId);
+
+        // Filter to only graded attempts
+        const gradedAttempts = allAttempts.filter(a => a.status === 'graded');
+
+        // If a course is selected, filter by course
+        let filteredAttempts = gradedAttempts;
+        if (selectedCourseId) {
+            // Filter attempts by matching test_id with tests from selected course
+            const courseTestIds = new Set(
+                allTests.filter(t => t.course_id === selectedCourseId).map(t => t.id)
+            );
+            filteredAttempts = gradedAttempts.filter(a => courseTestIds.has(a.test_id));
+        }
+
+        renderAttemptsTable(filteredAttempts);
+        renderAttemptsChart(filteredAttempts);
+    }
+
     function populateTestsSelect(tests) {
         dbg("populateTestsSelect() with", tests ? tests.length : 0, "tests");
         testSelect.innerHTML = "";
@@ -416,11 +481,16 @@
             setCookie("quiz_dni", dni, 7);
             currentDni = dni;
 
+            // Fetch courses
+            const coursesData = await fetchCourses();
+            allCourses = coursesData.courses || [];
+            populateCoursesSelect(allCourses);
+
             // Fetch tests
             const testsData = await fetchAvailableTests();
-            let tests = testsData.tests || [];
+            allTests = testsData.tests || [];
 
-            populateTestsSelect(tests);
+            filterAndPopulateTests();
 
             // Fetch attempts
             const attemptsData = await fetchStudentAttempts(dni);
@@ -429,17 +499,13 @@
                 return;
             }
 
-            const attempts = attemptsData.attempts || [];
-            
-            // Filter: only show graded attempts (not in_progress)
-            const gradedAttempts = attempts.filter(a => a.status === 'graded');
-            
-            renderAttemptsTable(gradedAttempts);
-            renderAttemptsChart(gradedAttempts);
+            allAttempts = attemptsData.attempts || [];
+
+            filterAndRenderAttempts();
 
             // Check role from first attempt (if any)
             currentRole = null;
-            if (attempts.length > 0) {
+            if (allAttempts.length > 0) {
                 // We don't have role in attempts, need to get from user
                 // For now, check if DNI matches teacher pattern
                 // Better: fetch user info from a /user/{dni} endpoint
@@ -451,10 +517,6 @@
                 loginCard.classList.add("hidden");
             }
 
-            // Show rename button for all logged-in users
-            if (renameMyTestBtn) {
-                renameMyTestBtn.classList.remove("hidden");
-            }
 
             // Infer role: if DNI matches known teacher pattern, show teacher panel
             // For demo: check if this is a teacher by attempting to fetch teacher dashboard
@@ -504,6 +566,16 @@
         }
     });
 
+    // ---------- Course select change ----------
+    courseSelect.addEventListener("change", function () {
+        const value = courseSelect.value;
+        selectedCourseId = value ? parseInt(value, 10) : null;
+        selectedCourse = selectedCourseId ? allCourses.find(c => c.id === selectedCourseId) : null;
+        dbg("Course selected:", selectedCourseId, selectedCourse);
+        filterAndPopulateTests();
+        filterAndRenderAttempts();
+    });
+
     // ---------- Start selected test ----------
     startSelectedBtn.addEventListener("click", async function () {
         errorDiv.textContent = "";
@@ -529,7 +601,7 @@
         const numQuestions = parseInt(numQuestionsInput.value, 10);
         const testName = testNameInput ? testNameInput.value.trim() : "";
         const maxAttempts = maxAttemptsInput ? parseInt(maxAttemptsInput.value, 10) : null;
-        
+
         dbg("Create random test clicked, numQuestions=", numQuestions, "testName=", testName, "maxAttempts=", maxAttempts);
         if (isNaN(numQuestions) || numQuestions < 1) {
             randomInfo.textContent = "Enter a valid number of questions (>=1).";
@@ -539,10 +611,15 @@
             randomInfo.textContent = "Load your dashboard first.";
             return;
         }
+        if (!selectedCourse) {
+            randomInfo.textContent = "Select a course first.";
+            return;
+        }
 
         try {
             const payload = {
                 student_dni: currentDni,
+                course_code: selectedCourse.code,
                 num_questions: numQuestions,
             };
             // Add title only if provided
@@ -614,58 +691,6 @@
         }
     });
 
-    // ---------- Rename test (for all users - can rename their own tests) ----------
-    if (renameMyTestBtn) {
-        renameMyTestBtn.addEventListener("click", async function () {
-            if (renameInfo) renameInfo.textContent = "";
-            
-            const testId = testSelect.value;
-            dbg("Rename my test clicked, testId=", testId);
-            
-            if (!testId) {
-                if (renameInfo) renameInfo.textContent = "Select a test first.";
-                return;
-            }
-            if (!currentDni) {
-                if (renameInfo) renameInfo.textContent = "Load your dashboard first.";
-                return;
-            }
-
-            const newTitle = prompt("Enter new name for this test:");
-            if (!newTitle || !newTitle.trim()) {
-                return; // Cancelled or empty
-            }
-
-            try {
-                const resp = await fetch(`/tests/${encodeURIComponent(testId)}`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        title: newTitle.trim(),
-                        user_dni: currentDni
-                    }),
-                });
-                dbg("rename_test response status", resp.status);
-                if (!resp.ok) {
-                    const txt = await resp.text();
-                    if (renameInfo) renameInfo.textContent = "Error: " + txt;
-                    return;
-                }
-                const data = await resp.json();
-                if (data.error) {
-                    if (renameInfo) renameInfo.textContent = data.error;
-                    return;
-                }
-                if (renameInfo) renameInfo.textContent = data.message || "Test renamed!";
-
-                // Refresh tests list
-                loadDashboardBtn.click();
-            } catch (e) {
-                dbg("rename_test exception", e);
-                if (renameInfo) renameInfo.textContent = "Error: " + e;
-            }
-        });
-    }
 
     // Teacher: open question bank
     if (btnQuestionBank) {
@@ -864,21 +889,23 @@
         }
     });
 
-    // Teacher: rename test (in teacher panel - can rename ANY test)
+    // Rename test (for all users)
     renameTestBtn.addEventListener("click", async function () {
-        deleteTestInfo.textContent = "";
-        dbg("Rename test button clicked (teacher panel), role=", currentRole);
-        if (currentRole !== "teacher") {
-            deleteTestInfo.textContent = "Only teachers can use this panel.";
+        if (renameInfo) renameInfo.textContent = "";
+
+        const testId = testSelect.value;
+        dbg("Rename test clicked, testId=", testId);
+
+        if (!testId) {
+            if (renameInfo) renameInfo.textContent = "Select a test first.";
             return;
         }
-        const testId = testSelect.value;
-        if (!testId) {
-            deleteTestInfo.textContent = "Select a test first.";
+        if (!currentDni) {
+            if (renameInfo) renameInfo.textContent = "Load your dashboard first.";
             return;
         }
 
-        const newTitle = prompt("Enter new title for this test:");
+        const newTitle = prompt("Enter new name for this test:");
         if (!newTitle || !newTitle.trim()) {
             return; // Cancelled or empty
         }
@@ -889,27 +916,27 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     title: newTitle.trim(),
-                    teacher_dni: currentDni
+                    user_dni: currentDni
                 }),
             });
             dbg("rename_test response status", resp.status);
             if (!resp.ok) {
                 const txt = await resp.text();
-                deleteTestInfo.textContent = "Error renaming test: " + txt;
+                if (renameInfo) renameInfo.textContent = "Error: " + txt;
                 return;
             }
             const data = await resp.json();
             if (data.error) {
-                deleteTestInfo.textContent = data.error;
+                if (renameInfo) renameInfo.textContent = data.error;
                 return;
             }
-            deleteTestInfo.textContent = data.message || "Test renamed successfully.";
+            if (renameInfo) renameInfo.textContent = data.message || "Test renamed!";
 
             // Refresh tests list
             loadDashboardBtn.click();
         } catch (e) {
             dbg("rename_test exception", e);
-            deleteTestInfo.textContent = "Error renaming test: " + e;
+            if (renameInfo) renameInfo.textContent = "Error: " + e;
         }
     });
 

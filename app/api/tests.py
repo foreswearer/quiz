@@ -20,23 +20,25 @@ def available_tests():
                 """
                 SELECT
                     t.id,
+                    t.course_id,
                     t.title,
                     t.description,
                     COALESCE(t.total_points, 0)::float AS total_points,
                     COUNT(tq.question_id) AS num_questions
                 FROM test t
                 LEFT JOIN test_question tq ON tq.test_id = t.id
-                GROUP BY t.id, t.title, t.description, t.total_points
+                GROUP BY t.id, t.course_id, t.title, t.description, t.total_points
                 ORDER BY t.id
                 """
             )
             rows = cur.fetchall()
 
             tests: List[Dict[str, Any]] = []
-            for tid, title, desc, total_points, num_questions in rows:
+            for tid, course_id, title, desc, total_points, num_questions in rows:
                 tests.append(
                     {
                         "id": tid,
+                        "course_id": course_id,
                         "title": title,
                         "description": desc,
                         "total_points": total_points,
@@ -154,7 +156,12 @@ def create_random_test(req: RandomTestRequest):
 
             n = min(max(1, req.num_questions), available_questions)
 
-            title = f"Random {n} – created by {req.student_dni}"
+            # Use custom title if provided, otherwise use default
+            if req.title and req.title.strip():
+                title = req.title.strip()
+            else:
+                title = f"Random {n} – created by {req.student_dni}"
+
             description = (
                 f"Random {n}-question test from course "
                 f"{req.course_code} ({course_name})."
@@ -172,25 +179,19 @@ def create_random_test(req: RandomTestRequest):
 
             cur.execute(
                 """
-                WITH q AS (
-                    SELECT
-                        qb.id AS question_id,
-                        row_number() OVER (ORDER BY random()) AS rn
-                    FROM question_bank qb
-                    WHERE qb.course_id = %s
-                )
                 INSERT INTO test_question (test_id, question_id, order_index, points)
                 SELECT
                     %s AS test_id,
-                    q.question_id,
-                    q.rn AS order_index,
+                    qb.id AS question_id,
+                    row_number() OVER () AS order_index,
                     qb.default_points
-                FROM q
-                JOIN question_bank qb ON qb.id = q.question_id
-                WHERE q.rn <= %s
+                FROM question_bank qb
+                WHERE qb.course_id = %s
+                ORDER BY random()
+                LIMIT %s
                 RETURNING question_id
                 """,
-                (course_id, test_id, n),
+                (test_id, course_id, n),
             )
             inserted_questions = cur.fetchall()
             actual_n = len(inserted_questions)
@@ -229,12 +230,10 @@ def delete_test(
     Teachers can delete any test.
     Students and power_students can delete tests they created.
     """
-    print(f"[DELETE TEST] test_id={test_id}, dni={dni}")  # Debug log
     conn = get_connection()
     try:
         with conn.cursor() as cur:
             user = get_user_by_dni(cur, dni)
-            print(f"[DELETE TEST] user={user}")  # Debug log
             if user is None:
                 return {"error": f"user with DNI {dni} not found"}
 
@@ -253,12 +252,8 @@ def delete_test(
             # Authorization check
             is_teacher = user["role"] == "teacher"
             is_owner = test_created_by == user["id"]
-            print(
-                f"[DELETE TEST] Authorization: is_teacher={is_teacher}, is_owner={is_owner}, user_role={user['role']}, user_id={user['id']}, test_created_by={test_created_by}"
-            )  # Debug log
 
             if not is_teacher and not is_owner:
-                print("[DELETE TEST] Authorization FAILED")  # Debug log
                 return {"error": "you can only delete tests you created"}
             test_title = test["title"]
 

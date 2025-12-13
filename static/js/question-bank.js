@@ -101,6 +101,11 @@
     const btnCancelCourse = document.getElementById("btn-cancel-course");
     const courseFormError = document.getElementById("course-form-error");
 
+    const jsonFileInput = document.getElementById("json-file");
+    const replaceQuestionsCheckbox = document.getElementById("replace-questions");
+    const btnUploadJson = document.getElementById("btn-upload-json");
+    const uploadResult = document.getElementById("upload-result");
+
     const questionsEmpty = document.getElementById("questions-empty");
     const questionsLoading = document.getElementById("questions-loading");
     const questionsTableWrapper = document.getElementById("questions-table-wrapper");
@@ -153,14 +158,16 @@
         return data.courses || [];
     }
 
-    async function createCourse(code, name) {
-        dbg("createCourse()", code, name);
+    async function createCourse(code, name, academic_year, class_group) {
+        dbg("createCourse()", code, name, academic_year, class_group);
         const resp = await fetch("/courses", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 code: code,
                 name: name,
+                academic_year: academic_year,
+                class_group: class_group,
                 teacher_dni: teacherDni,
             }),
         });
@@ -538,6 +545,8 @@
             const value = courseSelect.value;
             selectedCourseId = value ? parseInt(value, 10) : null;
             btnAddQuestion.disabled = !selectedCourseId;
+            jsonFileInput.disabled = !selectedCourseId;
+            btnUploadJson.disabled = !selectedCourseId;
             closeQuestionEditor();
             await loadQuestions();
         });
@@ -568,11 +577,27 @@
                 return;
             }
 
+            // Extract academic year from first 4 characters of code
+            const yearStr = code.substring(0, 4);
+            const year = parseInt(yearStr, 10);
+            if (isNaN(year) || yearStr.length !== 4) {
+                courseFormError.textContent = "Course code must start with 4 digits (e.g., 2526-45810-A)";
+                return;
+            }
+
+            // Extract class group from last segment after last dash
+            const parts = code.split("-");
+            const group = parts[parts.length - 1];
+            if (!group) {
+                courseFormError.textContent = "Course code must end with class group (e.g., 2526-45810-A)";
+                return;
+            }
+
             try {
                 btnSaveCourse.disabled = true;
                 btnSaveCourse.textContent = "Saving...";
 
-                const result = await createCourse(code, name);
+                const result = await createCourse(code, name, year, group);
                 if (result.error) {
                     courseFormError.textContent = result.error;
                     return;
@@ -584,6 +609,8 @@
                 courseSelect.value = result.course.id;
                 selectedCourseId = result.course.id;
                 btnAddQuestion.disabled = false;
+                jsonFileInput.disabled = false;
+                btnUploadJson.disabled = false;
                 newCourseForm.classList.add("hidden");
                 await loadQuestions();
             } catch (e) {
@@ -597,6 +624,92 @@
         // Cancel course
         btnCancelCourse.addEventListener("click", () => {
             newCourseForm.classList.add("hidden");
+        });
+
+        // Upload JSON button
+        btnUploadJson.addEventListener("click", async () => {
+            const file = jsonFileInput.files[0];
+            if (!file) {
+                uploadResult.textContent = "Please select a JSON file first";
+                uploadResult.style.color = "var(--error)";
+                return;
+            }
+
+            if (!selectedCourseId) {
+                uploadResult.textContent = "Please select a course first";
+                uploadResult.style.color = "var(--error)";
+                return;
+            }
+
+            const shouldReplace = replaceQuestionsCheckbox.checked;
+
+            try {
+                btnUploadJson.disabled = true;
+                btnUploadJson.textContent = "Uploading...";
+                uploadResult.textContent = "Reading file...";
+                uploadResult.style.color = "var(--text-muted)";
+
+                // Read file content
+                const content = await file.text();
+                const jsonData = JSON.parse(content);
+
+                // Get the selected course code
+                const selectedCourse = courses.find(c => c.id === selectedCourseId);
+                if (!selectedCourse) {
+                    uploadResult.textContent = "Selected course not found";
+                    uploadResult.style.color = "var(--error)";
+                    return;
+                }
+
+                // Set the course code and replace flag in the JSON data
+                jsonData.course_code = selectedCourse.code;
+                jsonData.replace_existing = shouldReplace;
+
+                if (shouldReplace) {
+                    uploadResult.textContent = "Deleting existing questions and uploading new ones...";
+                } else {
+                    uploadResult.textContent = "Uploading questions...";
+                }
+
+                // Upload to API
+                const resp = await fetch("/api/question-bank/upload", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(jsonData)
+                });
+
+                const result = await resp.json();
+
+                if (result.error) {
+                    uploadResult.textContent = result.error;
+                    uploadResult.style.color = "var(--error)";
+                    return;
+                }
+
+                let message = result.message;
+                if (result.deleted_count) {
+                    message = `Deleted ${result.deleted_count} existing question(s). ` + message;
+                }
+                if (result.errors && result.errors.length > 0) {
+                    message += "\n\nWarnings:\n" + result.errors.join("\n");
+                }
+
+                uploadResult.textContent = message;
+                uploadResult.style.color = "var(--success)";
+
+                // Clear file input and reload questions
+                jsonFileInput.value = "";
+                replaceQuestionsCheckbox.checked = false;
+                await loadQuestions();
+
+            } catch (e) {
+                uploadResult.textContent = "Error: " + e.message;
+                uploadResult.style.color = "var(--error)";
+                dbg("Upload error:", e);
+            } finally {
+                btnUploadJson.disabled = false;
+                btnUploadJson.textContent = "📤 Upload Questions";
+            }
         });
 
         // Add question

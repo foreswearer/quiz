@@ -10,3 +10,4 @@ venv/
 *.sqlite3
 production/
 /pre-push.ps1
+/get_from_branch.ps1
