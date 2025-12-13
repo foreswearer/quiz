@@ -97,11 +97,14 @@
     const newCourseForm = document.getElementById("new-course-form");
     const newCourseCode = document.getElementById("new-course-code");
     const newCourseName = document.getElementById("new-course-name");
+    const newCourseYear = document.getElementById("new-course-year");
+    const newCourseGroup = document.getElementById("new-course-group");
     const btnSaveCourse = document.getElementById("btn-save-course");
     const btnCancelCourse = document.getElementById("btn-cancel-course");
     const courseFormError = document.getElementById("course-form-error");
 
     const jsonFileInput = document.getElementById("json-file");
+    const replaceQuestionsCheckbox = document.getElementById("replace-questions");
     const btnUploadJson = document.getElementById("btn-upload-json");
     const uploadResult = document.getElementById("upload-result");
 
@@ -157,14 +160,16 @@
         return data.courses || [];
     }
 
-    async function createCourse(code, name) {
-        dbg("createCourse()", code, name);
+    async function createCourse(code, name, academic_year, class_group) {
+        dbg("createCourse()", code, name, academic_year, class_group);
         const resp = await fetch("/courses", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 code: code,
                 name: name,
+                academic_year: academic_year,
+                class_group: class_group,
                 teacher_dni: teacherDni,
             }),
         });
@@ -553,6 +558,8 @@
             newCourseForm.classList.toggle("hidden");
             newCourseCode.value = "";
             newCourseName.value = "";
+            newCourseYear.value = "";
+            newCourseGroup.value = "";
             courseFormError.textContent = "";
             if (!newCourseForm.classList.contains("hidden")) {
                 newCourseCode.focus();
@@ -564,6 +571,8 @@
             courseFormError.textContent = "";
             const code = newCourseCode.value.trim();
             const name = newCourseName.value.trim();
+            const year = parseInt(newCourseYear.value, 10);
+            const group = newCourseGroup.value.trim();
 
             if (!code) {
                 courseFormError.textContent = "Course code is required";
@@ -573,12 +582,20 @@
                 courseFormError.textContent = "Course name is required";
                 return;
             }
+            if (!year || year < 2020 || year > 2099) {
+                courseFormError.textContent = "Valid academic year is required";
+                return;
+            }
+            if (!group) {
+                courseFormError.textContent = "Class group is required";
+                return;
+            }
 
             try {
                 btnSaveCourse.disabled = true;
                 btnSaveCourse.textContent = "Saving...";
 
-                const result = await createCourse(code, name);
+                const result = await createCourse(code, name, year, group);
                 if (result.error) {
                     courseFormError.textContent = result.error;
                     return;
@@ -620,6 +637,8 @@
                 return;
             }
 
+            const shouldReplace = replaceQuestionsCheckbox.checked;
+
             try {
                 btnUploadJson.disabled = true;
                 btnUploadJson.textContent = "Uploading...";
@@ -638,10 +657,15 @@
                     return;
                 }
 
-                // Set the course code in the JSON data
+                // Set the course code and replace flag in the JSON data
                 jsonData.course_code = selectedCourse.code;
+                jsonData.replace_existing = shouldReplace;
 
-                uploadResult.textContent = "Uploading questions...";
+                if (shouldReplace) {
+                    uploadResult.textContent = "Deleting existing questions and uploading new ones...";
+                } else {
+                    uploadResult.textContent = "Uploading questions...";
+                }
 
                 // Upload to API
                 const resp = await fetch("/api/question-bank/upload", {
@@ -659,6 +683,9 @@
                 }
 
                 let message = result.message;
+                if (result.deleted_count) {
+                    message = `Deleted ${result.deleted_count} existing question(s). ` + message;
+                }
                 if (result.errors && result.errors.length > 0) {
                     message += "\n\nWarnings:\n" + result.errors.join("\n");
                 }
@@ -668,6 +695,7 @@
 
                 // Clear file input and reload questions
                 jsonFileInput.value = "";
+                replaceQuestionsCheckbox.checked = false;
                 await loadQuestions();
 
             } catch (e) {

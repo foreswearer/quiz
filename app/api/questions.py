@@ -545,6 +545,7 @@ def upload_questions_from_json(data: dict):
     Expected JSON format:
     {
         "course_code": "2526-45810-A",
+        "replace_existing": false,  (optional, defaults to false)
         "questions": [
             {
                 "question_text": "What is...",
@@ -561,6 +562,7 @@ def upload_questions_from_json(data: dict):
     """
     course_code = data.get("course_code", "").strip()
     questions = data.get("questions", [])
+    replace_existing = data.get("replace_existing", False)
 
     if not course_code:
         return {"error": "course_code is required"}
@@ -578,6 +580,50 @@ def upload_questions_from_json(data: dict):
                 return {"error": f"Course with code '{course_code}' not found"}
 
             course_id, course_name = row
+
+            deleted_count = 0
+
+            # Handle replace mode: delete existing questions
+            if replace_existing:
+                # First check if any existing questions are used in tests
+                cur.execute(
+                    """
+                    SELECT COUNT(DISTINCT tq.question_id)
+                    FROM test_question tq
+                    JOIN question_bank qb ON qb.id = tq.question_id
+                    WHERE qb.course_id = %s
+                    """,
+                    (course_id,),
+                )
+                used_count = cur.fetchone()[0]
+                if used_count > 0:
+                    return {
+                        "error": f"Cannot replace: {used_count} existing question(s) are used in tests"
+                    }
+
+                # Count questions to be deleted
+                cur.execute(
+                    "SELECT COUNT(*) FROM question_bank WHERE course_id = %s",
+                    (course_id,),
+                )
+                deleted_count = cur.fetchone()[0]
+
+                # Delete options first (foreign key constraint)
+                cur.execute(
+                    """
+                    DELETE FROM question_option
+                    WHERE question_id IN (
+                        SELECT id FROM question_bank WHERE course_id = %s
+                    )
+                    """,
+                    (course_id,),
+                )
+
+                # Then delete questions
+                cur.execute(
+                    "DELETE FROM question_bank WHERE course_id = %s",
+                    (course_id,),
+                )
 
             created_count = 0
             errors = []
@@ -638,11 +684,16 @@ def upload_questions_from_json(data: dict):
 
             conn.commit()
 
-            return {
+            result = {
                 "message": f"Successfully uploaded {created_count} question(s) to course '{course_name}'",
                 "course_code": course_code,
                 "created_count": created_count,
                 "errors": errors if errors else None,
             }
+
+            if deleted_count > 0:
+                result["deleted_count"] = deleted_count
+
+            return result
     finally:
         conn.close()
