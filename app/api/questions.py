@@ -636,9 +636,7 @@ def upload_questions_from_json(data: dict):
 
                 # Validate question
                 if not question_text:
-                    errors.append(
-                        f"Question {idx + 1}: question_text is required"
-                    )
+                    errors.append(f"Question {idx + 1}: question_text is required")
                     continue
 
                 if not options or len(options) < 2:
