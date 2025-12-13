@@ -20,23 +20,25 @@ def available_tests():
                 """
                 SELECT
                     t.id,
+                    t.course_id,
                     t.title,
                     t.description,
                     COALESCE(t.total_points, 0)::float AS total_points,
                     COUNT(tq.question_id) AS num_questions
                 FROM test t
                 LEFT JOIN test_question tq ON tq.test_id = t.id
-                GROUP BY t.id, t.title, t.description, t.total_points
+                GROUP BY t.id, t.course_id, t.title, t.description, t.total_points
                 ORDER BY t.id
                 """
             )
             rows = cur.fetchall()
 
             tests: List[Dict[str, Any]] = []
-            for tid, title, desc, total_points, num_questions in rows:
+            for tid, course_id, title, desc, total_points, num_questions in rows:
                 tests.append(
                     {
                         "id": tid,
+                        "course_id": course_id,
                         "title": title,
                         "description": desc,
                         "total_points": total_points,
