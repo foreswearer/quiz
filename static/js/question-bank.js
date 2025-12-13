@@ -97,8 +97,6 @@
     const newCourseForm = document.getElementById("new-course-form");
     const newCourseCode = document.getElementById("new-course-code");
     const newCourseName = document.getElementById("new-course-name");
-    const newCourseYear = document.getElementById("new-course-year");
-    const newCourseGroup = document.getElementById("new-course-group");
     const btnSaveCourse = document.getElementById("btn-save-course");
     const btnCancelCourse = document.getElementById("btn-cancel-course");
     const courseFormError = document.getElementById("course-form-error");
@@ -558,8 +556,6 @@
             newCourseForm.classList.toggle("hidden");
             newCourseCode.value = "";
             newCourseName.value = "";
-            newCourseYear.value = "";
-            newCourseGroup.value = "";
             courseFormError.textContent = "";
             if (!newCourseForm.classList.contains("hidden")) {
                 newCourseCode.focus();
@@ -571,8 +567,6 @@
             courseFormError.textContent = "";
             const code = newCourseCode.value.trim();
             const name = newCourseName.value.trim();
-            const year = parseInt(newCourseYear.value, 10);
-            const group = newCourseGroup.value.trim();
 
             if (!code) {
                 courseFormError.textContent = "Course code is required";
@@ -582,12 +576,19 @@
                 courseFormError.textContent = "Course name is required";
                 return;
             }
+
+            // Extract academic year from first 4 characters of code
+            const year = parseInt(code.substring(0, 4), 10);
             if (!year || year < 2020 || year > 2099) {
-                courseFormError.textContent = "Valid academic year is required";
+                courseFormError.textContent = "Course code must start with a valid academic year (2020-2099)";
                 return;
             }
+
+            // Extract class group from last segment after last dash
+            const parts = code.split("-");
+            const group = parts[parts.length - 1];
             if (!group) {
-                courseFormError.textContent = "Class group is required";
+                courseFormError.textContent = "Course code must end with class group (e.g., 2526-45810-A)";
                 return;
             }
 
