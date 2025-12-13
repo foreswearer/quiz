@@ -26,10 +26,10 @@ jobs:
           fi
       - name: Lint with Ruff
         run: |
-          # Run ruff for linting
-          ruff check .
-          # Run ruff for formatting check
-          ruff format --check .
+          # Run ruff for linting with verbose output
+          ruff check . --output-format=github --show-fixes
+          # Run ruff for formatting check with diff
+          ruff format --check . --diff
       - name: Run Tests
         run: |
           if [ -d tests ]; then
