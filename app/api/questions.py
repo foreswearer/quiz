@@ -665,6 +665,7 @@ def upload_questions_from_json(data: dict):
     course_code = data.get("course_code", "").strip()
     questions = data.get("questions", [])
     replace_existing = data.get("replace_existing", False)
+    confirm_override_answers = data.get("confirm_override_answers", False)
 
     if not course_code:
         return {"error": "course_code is required"}
@@ -703,6 +704,27 @@ def upload_questions_from_json(data: dict):
                         "error": f"Cannot replace: {used_count} existing question(s) are used in tests"
                     }
 
+                # Check if any questions have student answers
+                cur.execute(
+                    """
+                    SELECT COUNT(DISTINCT sa.id)
+                    FROM student_answer sa
+                    JOIN question_option qo ON qo.id = sa.selected_option_id
+                    JOIN question_bank qb ON qb.id = qo.question_id
+                    WHERE qb.course_id = %s
+                    """,
+                    (course_id,),
+                )
+                answered_count = cur.fetchone()[0]
+
+                # If there are answered questions and user hasn't confirmed, return warning
+                if answered_count > 0 and not confirm_override_answers:
+                    return {
+                        "warning": "answered_questions",
+                        "answered_count": answered_count,
+                        "message": f"This course has {answered_count} student answer(s). Replacing questions will delete all student answers. Do you want to continue?"
+                    }
+
                 # Count questions to be deleted
                 cur.execute(
                     "SELECT COUNT(*) FROM question_bank WHERE course_id = %s",
@@ -710,7 +732,20 @@ def upload_questions_from_json(data: dict):
                 )
                 deleted_count = cur.fetchone()[0]
 
-                # Delete options first (foreign key constraint)
+                # Delete student answers first (foreign key to question_option)
+                cur.execute(
+                    """
+                    DELETE FROM student_answer
+                    WHERE selected_option_id IN (
+                        SELECT qo.id FROM question_option qo
+                        JOIN question_bank qb ON qb.id = qo.question_id
+                        WHERE qb.course_id = %s
+                    )
+                    """,
+                    (course_id,),
+                )
+
+                # Delete options (foreign key constraint)
                 cur.execute(
                     """
                     DELETE FROM question_option
