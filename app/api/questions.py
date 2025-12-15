@@ -310,7 +310,7 @@ def list_questions(
 
 @router.get("/api/question-bank/export")
 def export_questions_as_json(
-    course_code: str = Query(..., description="Course code to export questions from")
+    course_code: str = Query(..., description="Course code to export questions from"),
 ):
     """
     Export all questions for a course in JSON format (same format as upload).
@@ -390,17 +390,21 @@ def export_questions_as_json(
 
                 # Normalize options: ensure exactly 4 options
                 while len(options) < 4:
-                    options.append({
-                        "text": f"Option {chr(65 + len(options))}",
-                        "is_correct": False
-                    })
+                    options.append(
+                        {
+                            "text": f"Option {chr(65 + len(options))}",
+                            "is_correct": False,
+                        }
+                    )
 
-                questions.append({
-                    "question_text": q_text,
-                    "question_type": q_type,
-                    "default_points": float(q_points) if q_points else 0.5,
-                    "options": options,
-                })
+                questions.append(
+                    {
+                        "question_text": q_text,
+                        "question_type": q_type,
+                        "default_points": float(q_points) if q_points else 0.5,
+                        "options": options,
+                    }
+                )
 
             return {
                 "course_code": course_code,
@@ -725,11 +729,13 @@ def upload_questions_from_json(data: dict):
                     while len(options) < 4:
                         options.append({"text": "", "is_correct": False})
 
-                    old_questions.append({
-                        "question_text": q_text,
-                        "options": options,
-                        "default_points": float(q_points) if q_points else 0.5,
-                    })
+                    old_questions.append(
+                        {
+                            "question_text": q_text,
+                            "options": options,
+                            "default_points": float(q_points) if q_points else 0.5,
+                        }
+                    )
                 # First check if any existing questions are used in tests
                 cur.execute(
                     """
@@ -852,18 +858,22 @@ def upload_questions_from_json(data: dict):
                             opt_idx + 1,
                         ),
                     )
-                    normalized_options.append({"text": opt_text, "is_correct": is_correct})
+                    normalized_options.append(
+                        {"text": opt_text, "is_correct": is_correct}
+                    )
 
                 # Normalize to 4 options for CSV
                 while len(normalized_options) < 4:
                     normalized_options.append({"text": "", "is_correct": False})
 
                 # Capture new question for CSV
-                new_questions.append({
-                    "question_text": question_text,
-                    "options": normalized_options,
-                    "default_points": float(default_points),
-                })
+                new_questions.append(
+                    {
+                        "question_text": question_text,
+                        "options": normalized_options,
+                        "default_points": float(default_points),
+                    }
+                )
 
                 created_count += 1
 
@@ -876,44 +886,64 @@ def upload_questions_from_json(data: dict):
                 writer = csv.writer(output)
 
                 # Write header
-                writer.writerow([
-                    "Status", "Question Text", "Option A", "Option B",
-                    "Option C", "Option D", "Correct Answer", "Points"
-                ])
+                writer.writerow(
+                    [
+                        "Status",
+                        "Question Text",
+                        "Option A",
+                        "Option B",
+                        "Option C",
+                        "Option D",
+                        "Correct Answer",
+                        "Points",
+                    ]
+                )
 
                 # Write old questions
                 for q in old_questions:
                     opts = q["options"]
-                    correct_idx = next((i for i, opt in enumerate(opts) if opt["is_correct"]), None)
-                    correct_letter = chr(65 + correct_idx) if correct_idx is not None else "N/A"
+                    correct_idx = next(
+                        (i for i, opt in enumerate(opts) if opt["is_correct"]), None
+                    )
+                    correct_letter = (
+                        chr(65 + correct_idx) if correct_idx is not None else "N/A"
+                    )
 
-                    writer.writerow([
-                        "OLD",
-                        q["question_text"],
-                        opts[0]["text"] if len(opts) > 0 else "",
-                        opts[1]["text"] if len(opts) > 1 else "",
-                        opts[2]["text"] if len(opts) > 2 else "",
-                        opts[3]["text"] if len(opts) > 3 else "",
-                        correct_letter,
-                        q["default_points"]
-                    ])
+                    writer.writerow(
+                        [
+                            "OLD",
+                            q["question_text"],
+                            opts[0]["text"] if len(opts) > 0 else "",
+                            opts[1]["text"] if len(opts) > 1 else "",
+                            opts[2]["text"] if len(opts) > 2 else "",
+                            opts[3]["text"] if len(opts) > 3 else "",
+                            correct_letter,
+                            q["default_points"],
+                        ]
+                    )
 
                 # Write new questions
                 for q in new_questions:
                     opts = q["options"]
-                    correct_idx = next((i for i, opt in enumerate(opts) if opt["is_correct"]), None)
-                    correct_letter = chr(65 + correct_idx) if correct_idx is not None else "N/A"
+                    correct_idx = next(
+                        (i for i, opt in enumerate(opts) if opt["is_correct"]), None
+                    )
+                    correct_letter = (
+                        chr(65 + correct_idx) if correct_idx is not None else "N/A"
+                    )
 
-                    writer.writerow([
-                        "NEW",
-                        q["question_text"],
-                        opts[0]["text"] if len(opts) > 0 else "",
-                        opts[1]["text"] if len(opts) > 1 else "",
-                        opts[2]["text"] if len(opts) > 2 else "",
-                        opts[3]["text"] if len(opts) > 3 else "",
-                        correct_letter,
-                        q["default_points"]
-                    ])
+                    writer.writerow(
+                        [
+                            "NEW",
+                            q["question_text"],
+                            opts[0]["text"] if len(opts) > 0 else "",
+                            opts[1]["text"] if len(opts) > 1 else "",
+                            opts[2]["text"] if len(opts) > 2 else "",
+                            opts[3]["text"] if len(opts) > 3 else "",
+                            correct_letter,
+                            q["default_points"],
+                        ]
+                    )
 
                 csv_data = output.getvalue()
 
