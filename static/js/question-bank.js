@@ -106,6 +106,9 @@
     const btnUploadJson = document.getElementById("btn-upload-json");
     const uploadResult = document.getElementById("upload-result");
 
+    const btnDownloadJson = document.getElementById("btn-download-json");
+    const downloadResult = document.getElementById("download-result");
+
     const questionsEmpty = document.getElementById("questions-empty");
     const questionsLoading = document.getElementById("questions-loading");
     const questionsTableWrapper = document.getElementById("questions-table-wrapper");
@@ -547,6 +550,7 @@
             btnAddQuestion.disabled = !selectedCourseId;
             jsonFileInput.disabled = !selectedCourseId;
             btnUploadJson.disabled = !selectedCourseId;
+            btnDownloadJson.disabled = !selectedCourseId;
             closeQuestionEditor();
             await loadQuestions();
         });
@@ -709,6 +713,66 @@
             } finally {
                 btnUploadJson.disabled = false;
                 btnUploadJson.textContent = "📤 Upload Questions";
+            }
+        });
+
+        // Download JSON button
+        btnDownloadJson.addEventListener("click", async () => {
+            if (!selectedCourseId) {
+                downloadResult.textContent = "Please select a course first";
+                downloadResult.style.color = "var(--error)";
+                return;
+            }
+
+            try {
+                btnDownloadJson.disabled = true;
+                btnDownloadJson.textContent = "Downloading...";
+                downloadResult.textContent = "Fetching questions...";
+                downloadResult.style.color = "var(--text-muted)";
+
+                // Get the selected course code
+                const selectedCourse = courses.find(c => c.id === selectedCourseId);
+                if (!selectedCourse) {
+                    downloadResult.textContent = "Selected course not found";
+                    downloadResult.style.color = "var(--error)";
+                    return;
+                }
+
+                // Fetch questions as JSON
+                const resp = await fetch(`/api/question-bank/export?course_code=${encodeURIComponent(selectedCourse.code)}`);
+                const result = await resp.json();
+
+                if (result.error) {
+                    downloadResult.textContent = result.error;
+                    downloadResult.style.color = "var(--error)";
+                    return;
+                }
+
+                // Create a downloadable file
+                const jsonString = JSON.stringify(result, null, 2);
+                const blob = new Blob([jsonString], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+
+                // Create a temporary link and click it to download
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `questions_${selectedCourse.code}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                const questionCount = result.questions ? result.questions.length : 0;
+                downloadResult.textContent = `Successfully downloaded ${questionCount} question(s)`;
+                downloadResult.style.color = "var(--success)";
+
+            } catch (e) {
+                downloadResult.textContent = "Error: " + e.message;
+                downloadResult.style.color = "var(--error)";
+                dbg("Download error:", e);
+            } finally {
+                btnDownloadJson.disabled = false;
+                btnDownloadJson.textContent = "📥 Download Questions";
             }
         });
 

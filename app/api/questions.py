@@ -695,3 +695,86 @@ def upload_questions_from_json(data: dict):
             return result
     finally:
         conn.close()
+
+
+@router.get("/api/question-bank/export")
+def export_questions_as_json(
+    course_code: str = Query(..., description="Course code to export questions from")
+):
+    """
+    Export all questions for a course in JSON format (same format as upload).
+
+    Returns JSON in the format:
+    {
+        "course_code": "2526-45810-A",
+        "questions": [
+            {
+                "question_text": "What is...",
+                "question_type": "single_choice",
+                "default_points": 0.5,
+                "options": [
+                    {"text": "Option A", "is_correct": false},
+                    {"text": "Option B", "is_correct": true}
+                ]
+            }
+        ]
+    }
+    """
+    if not course_code:
+        return {"error": "course_code is required"}
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # Check course exists
+            cur.execute("SELECT id, name FROM course WHERE code = %s", (course_code,))
+            row = cur.fetchone()
+            if not row:
+                return {"error": f"Course with code '{course_code}' not found"}
+
+            course_id, course_name = row
+
+            # Get all questions for this course
+            cur.execute(
+                """
+                SELECT id, question_text, question_type, default_points
+                FROM question_bank
+                WHERE course_id = %s
+                ORDER BY id
+                """,
+                (course_id,),
+            )
+            question_rows = cur.fetchall()
+
+            questions = []
+            for q_id, q_text, q_type, q_points in question_rows:
+                # Get options for this question
+                cur.execute(
+                    """
+                    SELECT option_text, is_correct
+                    FROM question_option
+                    WHERE question_id = %s
+                    ORDER BY order_index
+                    """,
+                    (q_id,),
+                )
+                option_rows = cur.fetchall()
+
+                options = [
+                    {"text": opt_text, "is_correct": bool(is_correct)}
+                    for opt_text, is_correct in option_rows
+                ]
+
+                questions.append({
+                    "question_text": q_text,
+                    "question_type": q_type,
+                    "default_points": float(q_points) if q_points else 0.5,
+                    "options": options,
+                })
+
+            return {
+                "course_code": course_code,
+                "questions": questions,
+            }
+    finally:
+        conn.close()
