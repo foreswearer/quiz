@@ -24,24 +24,10 @@
         themeToggle.textContent = "🌙";
     }
 
-    // Force course selector styling
-    const courseSelect = document.getElementById("course-select");
-    function updateCourseSelectColor() {
-        if (courseSelect) {
-            if (document.body.classList.contains("dark")) {
-                courseSelect.style.color = "#ffffff";
-            } else {
-                courseSelect.style.color = "";
-            }
-        }
-    }
-    updateCourseSelectColor();
-
     themeToggle.addEventListener("click", function () {
         document.body.classList.toggle("dark");
         const isDark = document.body.classList.contains("dark");
         themeToggle.textContent = isDark ? "☀️" : "🌙";
-        updateCourseSelectColor();
         window.localStorage.setItem("quiz_theme", isDark ? "dark" : "light");
         dbg("Theme toggled, now:", isDark ? "dark" : "light");
     });
