@@ -665,7 +665,6 @@ def upload_questions_from_json(data: dict):
     course_code = data.get("course_code", "").strip()
     questions = data.get("questions", [])
     replace_existing = data.get("replace_existing", False)
-    confirm_override_answers = data.get("confirm_override_answers", False)
 
     if not course_code:
         return {"error": "course_code is required"}
@@ -685,6 +684,7 @@ def upload_questions_from_json(data: dict):
             course_id, course_name = row
 
             deleted_count = 0
+            deleted_answers_count = 0
 
             # Handle replace mode: delete existing questions
             if replace_existing:
@@ -704,7 +704,14 @@ def upload_questions_from_json(data: dict):
                         "error": f"Cannot replace: {used_count} existing question(s) are used in tests"
                     }
 
-                # Check if any questions have student answers
+                # Count questions to be deleted
+                cur.execute(
+                    "SELECT COUNT(*) FROM question_bank WHERE course_id = %s",
+                    (course_id,),
+                )
+                deleted_count = cur.fetchone()[0]
+
+                # Count student answers that will be deleted (for informational message)
                 cur.execute(
                     """
                     SELECT COUNT(DISTINCT sa.id)
@@ -715,22 +722,7 @@ def upload_questions_from_json(data: dict):
                     """,
                     (course_id,),
                 )
-                answered_count = cur.fetchone()[0]
-
-                # If there are answered questions and user hasn't confirmed, return warning
-                if answered_count > 0 and not confirm_override_answers:
-                    return {
-                        "warning": "answered_questions",
-                        "answered_count": answered_count,
-                        "message": f"This course has {answered_count} student answer(s). Replacing questions will delete all student answers. Do you want to continue?"
-                    }
-
-                # Count questions to be deleted
-                cur.execute(
-                    "SELECT COUNT(*) FROM question_bank WHERE course_id = %s",
-                    (course_id,),
-                )
-                deleted_count = cur.fetchone()[0]
+                deleted_answers_count = cur.fetchone()[0]
 
                 # Delete student answers first (foreign key to question_option)
                 cur.execute(
@@ -828,6 +820,9 @@ def upload_questions_from_json(data: dict):
 
             if deleted_count > 0:
                 result["deleted_count"] = deleted_count
+
+            if deleted_answers_count > 0:
+                result["deleted_answers_count"] = deleted_answers_count
 
             return result
     finally:

@@ -690,45 +690,12 @@
                     return;
                 }
 
-                // Handle warning about answered questions
-                if (result.warning === "answered_questions") {
-                    const confirmed = confirm(
-                        `⚠️ WARNING\n\n${result.message}\n\n` +
-                        `This will permanently delete ${result.answered_count} student answer(s).\n\n` +
-                        `Click OK to proceed or Cancel to abort.`
-                    );
-
-                    if (!confirmed) {
-                        uploadResult.textContent = "Upload cancelled by user";
-                        uploadResult.style.color = "var(--text-muted)";
-                        return;
-                    }
-
-                    // User confirmed - retry with confirmation flag
-                    jsonData.confirm_override_answers = true;
-                    uploadResult.textContent = "Deleting student answers and replacing questions...";
-
-                    const resp2 = await fetch("/api/question-bank/upload", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(jsonData)
-                    });
-
-                    const result2 = await resp2.json();
-
-                    if (result2.error) {
-                        uploadResult.textContent = result2.error;
-                        uploadResult.style.color = "var(--error)";
-                        return;
-                    }
-
-                    // Use result2 for the rest of the processing
-                    Object.assign(result, result2);
-                }
-
                 let message = result.message;
                 if (result.deleted_count) {
                     message = `Deleted ${result.deleted_count} existing question(s). ` + message;
+                }
+                if (result.deleted_answers_count) {
+                    message += ` (${result.deleted_answers_count} student answer(s) were also removed)`;
                 }
                 if (result.errors && result.errors.length > 0) {
                     message += "\n\nWarnings:\n" + result.errors.join("\n");
