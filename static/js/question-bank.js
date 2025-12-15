@@ -106,6 +106,9 @@
     const btnUploadJson = document.getElementById("btn-upload-json");
     const uploadResult = document.getElementById("upload-result");
 
+    const btnDownloadJson = document.getElementById("btn-download-json");
+    const downloadResult = document.getElementById("download-result");
+
     const questionsEmpty = document.getElementById("questions-empty");
     const questionsLoading = document.getElementById("questions-loading");
     const questionsTableWrapper = document.getElementById("questions-table-wrapper");
@@ -547,6 +550,7 @@
             btnAddQuestion.disabled = !selectedCourseId;
             jsonFileInput.disabled = !selectedCourseId;
             btnUploadJson.disabled = !selectedCourseId;
+            btnDownloadJson.disabled = !selectedCourseId;
             closeQuestionEditor();
             await loadQuestions();
         });
@@ -690,12 +694,31 @@
                 if (result.deleted_count) {
                     message = `Deleted ${result.deleted_count} existing question(s). ` + message;
                 }
+                if (result.deleted_answers_count) {
+                    message += ` (${result.deleted_answers_count} student answer(s) were also removed)`;
+                }
                 if (result.errors && result.errors.length > 0) {
                     message += "\n\nWarnings:\n" + result.errors.join("\n");
                 }
 
                 uploadResult.textContent = message;
                 uploadResult.style.color = "var(--success)";
+
+                // Download CSV if available
+                if (result.csv_data) {
+                    const blob = new Blob([result.csv_data], { type: "text/csv" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                    a.download = `questions_upload_${selectedCourse.code}_${timestamp}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+
+                    uploadResult.textContent = message + "\n\n✅ CSV report downloaded";
+                }
 
                 // Clear file input and reload questions
                 jsonFileInput.value = "";
@@ -709,6 +732,66 @@
             } finally {
                 btnUploadJson.disabled = false;
                 btnUploadJson.textContent = "📤 Upload Questions";
+            }
+        });
+
+        // Download JSON button
+        btnDownloadJson.addEventListener("click", async () => {
+            if (!selectedCourseId) {
+                downloadResult.textContent = "Please select a course first";
+                downloadResult.style.color = "var(--error)";
+                return;
+            }
+
+            try {
+                btnDownloadJson.disabled = true;
+                btnDownloadJson.textContent = "Downloading...";
+                downloadResult.textContent = "Fetching questions...";
+                downloadResult.style.color = "var(--text-muted)";
+
+                // Get the selected course code
+                const selectedCourse = courses.find(c => c.id === selectedCourseId);
+                if (!selectedCourse) {
+                    downloadResult.textContent = "Selected course not found";
+                    downloadResult.style.color = "var(--error)";
+                    return;
+                }
+
+                // Fetch questions as JSON
+                const resp = await fetch(`/api/question-bank/export?course_code=${encodeURIComponent(selectedCourse.code)}`);
+                const result = await resp.json();
+
+                if (result.error) {
+                    downloadResult.textContent = result.error;
+                    downloadResult.style.color = "var(--error)";
+                    return;
+                }
+
+                // Create a downloadable file
+                const jsonString = JSON.stringify(result, null, 2);
+                const blob = new Blob([jsonString], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+
+                // Create a temporary link and click it to download
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `questions_${selectedCourse.code}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                const questionCount = result.questions ? result.questions.length : 0;
+                downloadResult.textContent = `Successfully downloaded ${questionCount} question(s)`;
+                downloadResult.style.color = "var(--success)";
+
+            } catch (e) {
+                downloadResult.textContent = "Error: " + e.message;
+                downloadResult.style.color = "var(--error)";
+                dbg("Download error:", e);
+            } finally {
+                btnDownloadJson.disabled = false;
+                btnDownloadJson.textContent = "📥 Download Questions";
             }
         });
 
@@ -791,6 +874,27 @@
         }
 
         mainContent.classList.remove("hidden");
+
+        // Force course selector styling
+        if (courseSelect) {
+            courseSelect.style.fontWeight = "bold";
+            courseSelect.style.minWidth = "300px";
+            // Force white color in dark mode
+            const updateColor = () => {
+                if (document.body.classList.contains("dark")) {
+                    courseSelect.style.color = "#ffffff";
+                } else {
+                    courseSelect.style.color = "";
+                }
+            };
+            updateColor();
+            // Watch for theme changes
+            const themeBtn = document.getElementById("theme-toggle");
+            if (themeBtn) {
+                themeBtn.addEventListener("click", () => setTimeout(updateColor, 10));
+            }
+        }
+
         initEventHandlers();
 
         // Load courses

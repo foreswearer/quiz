@@ -11,12 +11,21 @@
 
 .course-select-wrapper {
     display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
 }
 
-.course-select-wrapper select {
-    min-width: 300px;
+.course-select-wrapper label {
+    font-weight: 500;
+}
+
+.course-select-wrapper select,
+.course-select-wrapper #course-select,
+select#course-select {
+    min-width: 300px !important;
+    font-weight: 700 !important;
+    font-weight: bold !important;
 }
 
 /* Inline forms */
@@ -276,6 +285,19 @@
 }
 
 /* Dark mode adjustments */
+body.dark .course-select-wrapper select,
+body.dark .course-select-wrapper #course-select,
+body.dark select#course-select {
+    color: #ffffff !important;
+    background: #020617 !important;
+}
+
+body.dark #course-select option {
+    color: #ffffff !important;
+    background: #020617 !important;
+    font-weight: 700 !important;
+}
+
 body.dark .inline-form {
     background: #0f172a;
 }

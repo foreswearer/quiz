@@ -1,4 +1,6 @@
 from typing import Dict, Any, Optional, Tuple
+import csv
+import io
 
 from fastapi import APIRouter, Query
 
@@ -306,6 +308,112 @@ def list_questions(
         conn.close()
 
 
+@router.get("/api/question-bank/export")
+def export_questions_as_json(
+    course_code: str = Query(..., description="Course code to export questions from"),
+):
+    """
+    Export all questions for a course in JSON format (same format as upload).
+
+    Returns JSON in the format:
+    {
+        "course_code": "2526-45810-A",
+        "questions": [
+            {
+                "question_text": "What is...",
+                "question_type": "single_choice",
+                "default_points": 0.5,
+                "options": [
+                    {"text": "Option A", "is_correct": false},
+                    {"text": "Option B", "is_correct": true}
+                ]
+            }
+        ]
+    }
+    """
+    if not course_code:
+        return {"error": "course_code is required"}
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # Check course exists
+            cur.execute("SELECT id, name FROM course WHERE code = %s", (course_code,))
+            row = cur.fetchone()
+            if not row:
+                return {"error": f"Course with code '{course_code}' not found"}
+
+            course_id, course_name = row
+
+            # Get all questions for this course
+            cur.execute(
+                """
+                SELECT id, question_text, question_type, default_points
+                FROM question_bank
+                WHERE course_id = %s
+                ORDER BY id
+                """,
+                (course_id,),
+            )
+            question_rows = cur.fetchall()
+
+            questions = []
+            for q_id, q_text, q_type, q_points in question_rows:
+                # Get options for this question
+                cur.execute(
+                    """
+                    SELECT option_text, is_correct
+                    FROM question_option
+                    WHERE question_id = %s
+                    ORDER BY order_index
+                    """,
+                    (q_id,),
+                )
+                option_rows = cur.fetchall()
+
+                options = [
+                    {"text": opt_text, "is_correct": bool(is_correct)}
+                    for opt_text, is_correct in option_rows
+                ]
+
+                # Normalize options: ensure only one correct answer
+                correct_count = sum(1 for opt in options if opt["is_correct"])
+                if correct_count > 1:
+                    # Keep only the first correct answer
+                    found_correct = False
+                    for opt in options:
+                        if opt["is_correct"]:
+                            if found_correct:
+                                opt["is_correct"] = False
+                            else:
+                                found_correct = True
+
+                # Normalize options: ensure exactly 4 options
+                while len(options) < 4:
+                    options.append(
+                        {
+                            "text": f"Option {chr(65 + len(options))}",
+                            "is_correct": False,
+                        }
+                    )
+
+                questions.append(
+                    {
+                        "question_text": q_text,
+                        "question_type": q_type,
+                        "default_points": float(q_points) if q_points else 0.5,
+                        "options": options,
+                    }
+                )
+
+            return {
+                "course_code": course_code,
+                "questions": questions,
+            }
+    finally:
+        conn.close()
+
+
 @router.get("/api/question-bank/{question_id}")
 def get_question(question_id: int):
     """Get a single question with its options."""
@@ -582,9 +690,52 @@ def upload_questions_from_json(data: dict):
             course_id, course_name = row
 
             deleted_count = 0
+            deleted_answers_count = 0
+            old_questions = []
 
             # Handle replace mode: delete existing questions
             if replace_existing:
+                # Capture old questions before deleting (for CSV report)
+                cur.execute(
+                    """
+                    SELECT id, question_text, question_type, default_points
+                    FROM question_bank
+                    WHERE course_id = %s
+                    ORDER BY id
+                    """,
+                    (course_id,),
+                )
+                old_question_rows = cur.fetchall()
+
+                for q_id, q_text, q_type, q_points in old_question_rows:
+                    # Get options for this question
+                    cur.execute(
+                        """
+                        SELECT option_text, is_correct
+                        FROM question_option
+                        WHERE question_id = %s
+                        ORDER BY order_index
+                        """,
+                        (q_id,),
+                    )
+                    option_rows = cur.fetchall()
+
+                    options = [
+                        {"text": opt_text, "is_correct": bool(is_correct)}
+                        for opt_text, is_correct in option_rows
+                    ]
+
+                    # Normalize to 4 options
+                    while len(options) < 4:
+                        options.append({"text": "", "is_correct": False})
+
+                    old_questions.append(
+                        {
+                            "question_text": q_text,
+                            "options": options,
+                            "default_points": float(q_points) if q_points else 0.5,
+                        }
+                    )
                 # First check if any existing questions are used in tests
                 cur.execute(
                     """
@@ -608,7 +759,33 @@ def upload_questions_from_json(data: dict):
                 )
                 deleted_count = cur.fetchone()[0]
 
-                # Delete options first (foreign key constraint)
+                # Count student answers that will be deleted (for informational message)
+                cur.execute(
+                    """
+                    SELECT COUNT(DISTINCT sa.id)
+                    FROM student_answer sa
+                    JOIN question_option qo ON qo.id = sa.selected_option_id
+                    JOIN question_bank qb ON qb.id = qo.question_id
+                    WHERE qb.course_id = %s
+                    """,
+                    (course_id,),
+                )
+                deleted_answers_count = cur.fetchone()[0]
+
+                # Delete student answers first (foreign key to question_option)
+                cur.execute(
+                    """
+                    DELETE FROM student_answer
+                    WHERE selected_option_id IN (
+                        SELECT qo.id FROM question_option qo
+                        JOIN question_bank qb ON qb.id = qo.question_id
+                        WHERE qb.course_id = %s
+                    )
+                    """,
+                    (course_id,),
+                )
+
+                # Delete options (foreign key constraint)
                 cur.execute(
                     """
                     DELETE FROM question_option
@@ -627,6 +804,7 @@ def upload_questions_from_json(data: dict):
 
             created_count = 0
             errors = []
+            new_questions = []
 
             for idx, q_data in enumerate(questions):
                 question_text = q_data.get("question_text", "").strip()
@@ -664,7 +842,10 @@ def upload_questions_from_json(data: dict):
                 question_id = cur.fetchone()[0]
 
                 # Insert options
+                normalized_options = []
                 for opt_idx, opt in enumerate(options):
+                    opt_text = opt.get("text", "").strip()
+                    is_correct = bool(opt.get("is_correct", False))
                     cur.execute(
                         """
                         INSERT INTO question_option (question_id, option_text, is_correct, order_index)
@@ -672,15 +853,99 @@ def upload_questions_from_json(data: dict):
                         """,
                         (
                             question_id,
-                            opt.get("text", "").strip(),
-                            bool(opt.get("is_correct", False)),
+                            opt_text,
+                            is_correct,
                             opt_idx + 1,
                         ),
                     )
+                    normalized_options.append(
+                        {"text": opt_text, "is_correct": is_correct}
+                    )
+
+                # Normalize to 4 options for CSV
+                while len(normalized_options) < 4:
+                    normalized_options.append({"text": "", "is_correct": False})
+
+                # Capture new question for CSV
+                new_questions.append(
+                    {
+                        "question_text": question_text,
+                        "options": normalized_options,
+                        "default_points": float(default_points),
+                    }
+                )
 
                 created_count += 1
 
             conn.commit()
+
+            # Generate CSV with old and new questions
+            csv_data = None
+            if old_questions or new_questions:
+                output = io.StringIO()
+                writer = csv.writer(output)
+
+                # Write header
+                writer.writerow(
+                    [
+                        "Status",
+                        "Question Text",
+                        "Option A",
+                        "Option B",
+                        "Option C",
+                        "Option D",
+                        "Correct Answer",
+                        "Points",
+                    ]
+                )
+
+                # Write old questions
+                for q in old_questions:
+                    opts = q["options"]
+                    correct_idx = next(
+                        (i for i, opt in enumerate(opts) if opt["is_correct"]), None
+                    )
+                    correct_letter = (
+                        chr(65 + correct_idx) if correct_idx is not None else "N/A"
+                    )
+
+                    writer.writerow(
+                        [
+                            "OLD",
+                            q["question_text"],
+                            opts[0]["text"] if len(opts) > 0 else "",
+                            opts[1]["text"] if len(opts) > 1 else "",
+                            opts[2]["text"] if len(opts) > 2 else "",
+                            opts[3]["text"] if len(opts) > 3 else "",
+                            correct_letter,
+                            q["default_points"],
+                        ]
+                    )
+
+                # Write new questions
+                for q in new_questions:
+                    opts = q["options"]
+                    correct_idx = next(
+                        (i for i, opt in enumerate(opts) if opt["is_correct"]), None
+                    )
+                    correct_letter = (
+                        chr(65 + correct_idx) if correct_idx is not None else "N/A"
+                    )
+
+                    writer.writerow(
+                        [
+                            "NEW",
+                            q["question_text"],
+                            opts[0]["text"] if len(opts) > 0 else "",
+                            opts[1]["text"] if len(opts) > 1 else "",
+                            opts[2]["text"] if len(opts) > 2 else "",
+                            opts[3]["text"] if len(opts) > 3 else "",
+                            correct_letter,
+                            q["default_points"],
+                        ]
+                    )
+
+                csv_data = output.getvalue()
 
             result = {
                 "message": f"Successfully uploaded {created_count} question(s) to course '{course_name}'",
@@ -691,6 +956,12 @@ def upload_questions_from_json(data: dict):
 
             if deleted_count > 0:
                 result["deleted_count"] = deleted_count
+
+            if deleted_answers_count > 0:
+                result["deleted_answers_count"] = deleted_answers_count
+
+            if csv_data:
+                result["csv_data"] = csv_data
 
             return result
     finally:

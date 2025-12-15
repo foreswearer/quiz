@@ -11,3 +11,6 @@ venv/
 production/
 /pre-push.ps1
 /get_from_branch.ps1
+/amend_develop.ps1
+/amend_main.ps1
+/amend_*.ps1
