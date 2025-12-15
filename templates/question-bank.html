@@ -6,6 +6,16 @@
     <title>Question Bank - Quiz Platform</title>
     <link rel="stylesheet" href="/static/css/base.css">
     <link rel="stylesheet" href="/static/css/question-bank.css">
+    <style>
+        /* Force course selector styling */
+        #course-select {
+            font-weight: bold !important;
+        }
+        body.dark #course-select,
+        body.dark #course-select option {
+            color: #ffffff !important;
+        }
+    </style>
 </head>
 <body>
     <div class="page">
@@ -38,9 +48,9 @@
             <div class="card">
                 <h2>📖 Course Selection</h2>
                 <div class="course-controls">
-                    <div class="course-select-wrapper">
-                        <label for="course-select">Select Course:</label>
-                        <select id="course-select">
+                    <div class="course-select-wrapper" style="display: flex; flex-direction: row; align-items: center; gap: 0.75rem;">
+                        <label for="course-select" style="font-weight: 500;">Select Course:</label>
+                        <select id="course-select" style="min-width: 300px; font-weight: bold;">
                             <option value="">-- Select a course --</option>
                         </select>
                     </div>
