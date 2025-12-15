@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Question Bank - Quiz Platform</title>
     <link rel="stylesheet" href="/static/css/base.css">
-    <link rel="stylesheet" href="/static/css/question-bank.css">
+    <link rel="stylesheet" href="/static/css/question-bank.css?v=2">
 </head>
 <body>
     <div class="page">
@@ -111,6 +111,18 @@
   ]
 }</code></pre>
                 </details>
+            </div>
+
+            <!-- JSON Download Section -->
+            <div class="card">
+                <h2>📥 Download Questions as JSON</h2>
+                <p class="small">Export all questions from the selected course as a JSON file.</p>
+
+                <div class="form-actions">
+                    <button id="btn-download-json" type="button" disabled>📥 Download Questions</button>
+                </div>
+
+                <div id="download-result" class="form-result"></div>
             </div>
 
             <!-- Questions List -->
