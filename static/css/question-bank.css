@@ -11,12 +11,18 @@
 
 .course-select-wrapper {
     display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.course-select-wrapper label {
+    font-weight: 500;
 }
 
 .course-select-wrapper select {
     min-width: 300px;
+    font-weight: bold;
 }
 
 /* Inline forms */
@@ -276,6 +282,10 @@
 }
 
 /* Dark mode adjustments */
+body.dark .course-select-wrapper select {
+    color: #ffffff;
+}
+
 body.dark .inline-form {
     background: #0f172a;
 }
