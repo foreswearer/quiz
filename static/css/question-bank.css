@@ -20,9 +20,10 @@
     font-weight: 500;
 }
 
-.course-select-wrapper select {
+.course-select-wrapper select,
+#course-select {
     min-width: 300px;
-    font-weight: bold;
+    font-weight: bold !important;
 }
 
 /* Inline forms */
@@ -282,8 +283,9 @@
 }
 
 /* Dark mode adjustments */
-body.dark .course-select-wrapper select {
-    color: #ffffff;
+body.dark .course-select-wrapper select,
+body.dark #course-select {
+    color: #ffffff !important;
 }
 
 body.dark .inline-form {

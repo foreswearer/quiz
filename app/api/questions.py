@@ -374,6 +374,25 @@ def export_questions_as_json(
                     for opt_text, is_correct in option_rows
                 ]
 
+                # Normalize options: ensure only one correct answer
+                correct_count = sum(1 for opt in options if opt["is_correct"])
+                if correct_count > 1:
+                    # Keep only the first correct answer
+                    found_correct = False
+                    for opt in options:
+                        if opt["is_correct"]:
+                            if found_correct:
+                                opt["is_correct"] = False
+                            else:
+                                found_correct = True
+
+                # Normalize options: ensure exactly 4 options
+                while len(options) < 4:
+                    options.append({
+                        "text": f"Option {chr(65 + len(options))}",
+                        "is_correct": False
+                    })
+
                 questions.append({
                     "question_text": q_text,
                     "question_type": q_type,
