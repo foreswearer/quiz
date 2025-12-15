@@ -21,8 +21,10 @@
 }
 
 .course-select-wrapper select,
-#course-select {
-    min-width: 300px;
+.course-select-wrapper #course-select,
+select#course-select {
+    min-width: 300px !important;
+    font-weight: 700 !important;
     font-weight: bold !important;
 }
 
@@ -284,8 +286,16 @@
 
 /* Dark mode adjustments */
 body.dark .course-select-wrapper select,
-body.dark #course-select {
+body.dark .course-select-wrapper #course-select,
+body.dark select#course-select {
     color: #ffffff !important;
+    background: #020617 !important;
+}
+
+body.dark #course-select option {
+    color: #ffffff !important;
+    background: #020617 !important;
+    font-weight: 700 !important;
 }
 
 body.dark .inline-form {
