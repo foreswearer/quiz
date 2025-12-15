@@ -855,6 +855,27 @@
         }
 
         mainContent.classList.remove("hidden");
+
+        // Force course selector styling
+        if (courseSelect) {
+            courseSelect.style.fontWeight = "bold";
+            courseSelect.style.minWidth = "300px";
+            // Force white color in dark mode
+            const updateColor = () => {
+                if (document.body.classList.contains("dark")) {
+                    courseSelect.style.color = "#ffffff";
+                } else {
+                    courseSelect.style.color = "";
+                }
+            };
+            updateColor();
+            // Watch for theme changes
+            const themeBtn = document.getElementById("theme-toggle");
+            if (themeBtn) {
+                themeBtn.addEventListener("click", () => setTimeout(updateColor, 10));
+            }
+        }
+
         initEventHandlers();
 
         // Load courses
