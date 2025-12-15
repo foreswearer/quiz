@@ -704,6 +704,22 @@
                 uploadResult.textContent = message;
                 uploadResult.style.color = "var(--success)";
 
+                // Download CSV if available
+                if (result.csv_data) {
+                    const blob = new Blob([result.csv_data], { type: "text/csv" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                    a.download = `questions_upload_${selectedCourse.code}_${timestamp}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+
+                    uploadResult.textContent = message + "\n\n✅ CSV report downloaded";
+                }
+
                 // Clear file input and reload questions
                 jsonFileInput.value = "";
                 replaceQuestionsCheckbox.checked = false;

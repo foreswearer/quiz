@@ -1,4 +1,6 @@
 from typing import Dict, Any, Optional, Tuple
+import csv
+import io
 
 from fastapi import APIRouter, Query
 
@@ -685,9 +687,49 @@ def upload_questions_from_json(data: dict):
 
             deleted_count = 0
             deleted_answers_count = 0
+            old_questions = []
 
             # Handle replace mode: delete existing questions
             if replace_existing:
+                # Capture old questions before deleting (for CSV report)
+                cur.execute(
+                    """
+                    SELECT id, question_text, question_type, default_points
+                    FROM question_bank
+                    WHERE course_id = %s
+                    ORDER BY id
+                    """,
+                    (course_id,),
+                )
+                old_question_rows = cur.fetchall()
+
+                for q_id, q_text, q_type, q_points in old_question_rows:
+                    # Get options for this question
+                    cur.execute(
+                        """
+                        SELECT option_text, is_correct
+                        FROM question_option
+                        WHERE question_id = %s
+                        ORDER BY order_index
+                        """,
+                        (q_id,),
+                    )
+                    option_rows = cur.fetchall()
+
+                    options = [
+                        {"text": opt_text, "is_correct": bool(is_correct)}
+                        for opt_text, is_correct in option_rows
+                    ]
+
+                    # Normalize to 4 options
+                    while len(options) < 4:
+                        options.append({"text": "", "is_correct": False})
+
+                    old_questions.append({
+                        "question_text": q_text,
+                        "options": options,
+                        "default_points": float(q_points) if q_points else 0.5,
+                    })
                 # First check if any existing questions are used in tests
                 cur.execute(
                     """
@@ -756,6 +798,7 @@ def upload_questions_from_json(data: dict):
 
             created_count = 0
             errors = []
+            new_questions = []
 
             for idx, q_data in enumerate(questions):
                 question_text = q_data.get("question_text", "").strip()
@@ -793,7 +836,10 @@ def upload_questions_from_json(data: dict):
                 question_id = cur.fetchone()[0]
 
                 # Insert options
+                normalized_options = []
                 for opt_idx, opt in enumerate(options):
+                    opt_text = opt.get("text", "").strip()
+                    is_correct = bool(opt.get("is_correct", False))
                     cur.execute(
                         """
                         INSERT INTO question_option (question_id, option_text, is_correct, order_index)
@@ -801,15 +847,75 @@ def upload_questions_from_json(data: dict):
                         """,
                         (
                             question_id,
-                            opt.get("text", "").strip(),
-                            bool(opt.get("is_correct", False)),
+                            opt_text,
+                            is_correct,
                             opt_idx + 1,
                         ),
                     )
+                    normalized_options.append({"text": opt_text, "is_correct": is_correct})
+
+                # Normalize to 4 options for CSV
+                while len(normalized_options) < 4:
+                    normalized_options.append({"text": "", "is_correct": False})
+
+                # Capture new question for CSV
+                new_questions.append({
+                    "question_text": question_text,
+                    "options": normalized_options,
+                    "default_points": float(default_points),
+                })
 
                 created_count += 1
 
             conn.commit()
+
+            # Generate CSV with old and new questions
+            csv_data = None
+            if old_questions or new_questions:
+                output = io.StringIO()
+                writer = csv.writer(output)
+
+                # Write header
+                writer.writerow([
+                    "Status", "Question Text", "Option A", "Option B",
+                    "Option C", "Option D", "Correct Answer", "Points"
+                ])
+
+                # Write old questions
+                for q in old_questions:
+                    opts = q["options"]
+                    correct_idx = next((i for i, opt in enumerate(opts) if opt["is_correct"]), None)
+                    correct_letter = chr(65 + correct_idx) if correct_idx is not None else "N/A"
+
+                    writer.writerow([
+                        "OLD",
+                        q["question_text"],
+                        opts[0]["text"] if len(opts) > 0 else "",
+                        opts[1]["text"] if len(opts) > 1 else "",
+                        opts[2]["text"] if len(opts) > 2 else "",
+                        opts[3]["text"] if len(opts) > 3 else "",
+                        correct_letter,
+                        q["default_points"]
+                    ])
+
+                # Write new questions
+                for q in new_questions:
+                    opts = q["options"]
+                    correct_idx = next((i for i, opt in enumerate(opts) if opt["is_correct"]), None)
+                    correct_letter = chr(65 + correct_idx) if correct_idx is not None else "N/A"
+
+                    writer.writerow([
+                        "NEW",
+                        q["question_text"],
+                        opts[0]["text"] if len(opts) > 0 else "",
+                        opts[1]["text"] if len(opts) > 1 else "",
+                        opts[2]["text"] if len(opts) > 2 else "",
+                        opts[3]["text"] if len(opts) > 3 else "",
+                        correct_letter,
+                        q["default_points"]
+                    ])
+
+                csv_data = output.getvalue()
 
             result = {
                 "message": f"Successfully uploaded {created_count} question(s) to course '{course_name}'",
@@ -823,6 +929,9 @@ def upload_questions_from_json(data: dict):
 
             if deleted_answers_count > 0:
                 result["deleted_answers_count"] = deleted_answers_count
+
+            if csv_data:
+                result["csv_data"] = csv_data
 
             return result
     finally:
