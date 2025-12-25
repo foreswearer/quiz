@@ -581,3 +581,75 @@ def teacher_dashboard_overview(
             }
     finally:
         conn.close()
+
+
+@router.get("/student/{dni}/weak_questions")
+def get_student_weak_questions(dni: str, course_id: Optional[int] = Query(None)):
+    """
+    Get questions that a student struggles with most (questions answered incorrectly most often).
+    Optionally filter by course_id.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            user = get_user_by_dni(cur, dni)
+            if user is None:
+                return {"error": f"user with DNI {dni} not found"}
+
+            user_id = user["id"]
+
+            # Get questions the student got wrong, grouped by question
+            query = """
+                SELECT
+                    qb.id AS question_id,
+                    qb.question_text,
+                    qb.course_id,
+                    c.code AS course_code,
+                    c.name AS course_name,
+                    COUNT(*) AS times_wrong,
+                    COUNT(*) FILTER (WHERE sa.is_correct = TRUE) AS times_correct,
+                    COUNT(*) AS total_attempts
+                FROM student_answer sa
+                JOIN test_attempt ta ON ta.id = sa.attempt_id
+                JOIN question_bank qb ON qb.id = sa.question_id
+                JOIN course c ON c.id = qb.course_id
+                WHERE ta.student_id = %s
+                  AND sa.is_correct = FALSE
+            """
+
+            params = [user_id]
+
+            if course_id:
+                query += " AND qb.course_id = %s"
+                params.append(course_id)
+
+            query += """
+                GROUP BY qb.id, qb.question_text, qb.course_id, c.code, c.name
+                ORDER BY times_wrong DESC, qb.id
+                LIMIT 20
+            """
+
+            cur.execute(query, params)
+            rows = cur.fetchall()
+
+            weak_questions = []
+            for row in rows:
+                q_id, q_text, c_id, c_code, c_name, times_wrong, times_correct, total = row
+                weak_questions.append({
+                    "question_id": q_id,
+                    "question_text": q_text,
+                    "course_id": c_id,
+                    "course_code": c_code,
+                    "course_name": c_name,
+                    "times_wrong": int(times_wrong),
+                    "times_correct": int(times_correct),
+                    "total_attempts": int(total),
+                    "success_rate": round((times_correct / total * 100) if total > 0 else 0, 1)
+                })
+
+            return {
+                "student": user,
+                "weak_questions": weak_questions
+            }
+    finally:
+        conn.close()

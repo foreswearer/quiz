@@ -167,13 +167,25 @@ def create_random_test(req: RandomTestRequest):
                 f"{req.course_code} ({course_name})."
             )
 
+            # Set test configuration from request
+            test_type = req.test_type or "quiz"
+            time_limit = req.time_limit_minutes
+            max_attempts = req.max_attempts  # None = unlimited
+            randomize_q = req.randomize_questions if req.randomize_questions is not None else False
+            randomize_o = req.randomize_options if req.randomize_options is not None else False
+
             cur.execute(
                 """
-                INSERT INTO test (course_id, title, description, total_points, created_by)
-                VALUES (%s, %s, %s, NULL, %s)
+                INSERT INTO test (
+                    course_id, title, description, total_points, created_by,
+                    test_type, time_limit_minutes, max_attempts,
+                    randomize_questions, randomize_options
+                )
+                VALUES (%s, %s, %s, NULL, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
-                (course_id, title, description, user_id),
+                (course_id, title, description, user_id, test_type, time_limit,
+                 max_attempts, randomize_q, randomize_o),
             )
             test_id = cur.fetchone()[0]
 

@@ -115,10 +115,6 @@
         if (renameInfo) {
             renameInfo.textContent = "";
         }
-        // Hide max attempts container
-        if (maxAttemptsContainer) {
-            maxAttemptsContainer.classList.add("hidden");
-        }
     });
 
     // Dashboard button (teacher only)
@@ -144,7 +140,10 @@
     const testNameInput = document.getElementById("test-name");
     const numQuestionsInput = document.getElementById("num-questions");
     const maxAttemptsInput = document.getElementById("max-attempts");
-    const maxAttemptsContainer = document.getElementById("max-attempts-container");
+    const timeLimitInput = document.getElementById("time-limit");
+    const testTypeSelect = document.getElementById("test-type");
+    const randomizeQuestionsCheckbox = document.getElementById("randomize-questions");
+    const randomizeOptionsCheckbox = document.getElementById("randomize-options");
     const createRandomBtn = document.getElementById("create-random-test");
     const randomInfo = document.getElementById("random-info");
     const attemptsEmpty = document.getElementById("attempts-empty");
@@ -154,6 +153,7 @@
 
     const viewPodiumBtn = document.getElementById("view-podium-btn");
     const podiumInfo = document.getElementById("podium-info");
+    const shareTestBtn = document.getElementById("share-test-btn");
 
     // Rename button for all users (to rename their own tests)
     const renameInfo = document.getElementById("rename-info");
@@ -168,6 +168,27 @@
     const manageUsersBtn = document.getElementById("manage-users-btn");
     const usersManagement = document.getElementById("users-management");
     const usersList = document.getElementById("users-list");
+
+    // Power Student Panel
+    const powerStudentPanel = document.getElementById("power-student-panel");
+    const btnBrowseQuestions = document.getElementById("btn-browse-questions");
+    const btnSuggestQuestion = document.getElementById("btn-suggest-question");
+    const suggestQuestionForm = document.getElementById("suggest-question-form");
+    const suggestQuestionText = document.getElementById("suggest-question-text");
+    const suggestOptions = [
+        document.getElementById("suggest-option-0"),
+        document.getElementById("suggest-option-1"),
+        document.getElementById("suggest-option-2"),
+        document.getElementById("suggest-option-3"),
+    ];
+    const btnSubmitSuggestion = document.getElementById("btn-submit-suggestion");
+    const btnCancelSuggestion = document.getElementById("btn-cancel-suggestion");
+    const suggestionResult = document.getElementById("suggestion-result");
+
+    // Weak Questions
+    const btnShowWeakQuestions = document.getElementById("btn-show-weak-questions");
+    const weakQuestionsSection = document.getElementById("weak-questions-section");
+    const weakQuestionsList = document.getElementById("weak-questions-list");
 
     let currentDni = null;
     let currentRole = null;
@@ -533,10 +554,6 @@
                         if (dashboardBtn) {
                             dashboardBtn.classList.remove("hidden");
                         }
-                        // Show max attempts container for teachers
-                        if (maxAttemptsContainer) {
-                            maxAttemptsContainer.classList.remove("hidden");
-                        }
                         studentInfo.textContent = `Welcome, ${teacherData.summary.teacher.name} (Teacher)`;
                     }
                 }
@@ -550,10 +567,12 @@
                 if (dashboardBtn) {
                     dashboardBtn.classList.add("hidden");
                 }
-                // Hide max attempts container for students
-                if (maxAttemptsContainer) {
-                    maxAttemptsContainer.classList.add("hidden");
+
+                // Show power student panel if user is power_student
+                if (currentRole === "power_student" && powerStudentPanel) {
+                    powerStudentPanel.classList.remove("hidden");
                 }
+
                 // Show full name and specific role
                 const userName = attemptsData.student?.name || dni;
                 const roleDisplay = currentRole === "power_student" ? "Power Student" :
@@ -601,8 +620,13 @@
         const numQuestions = parseInt(numQuestionsInput.value, 10);
         const testName = testNameInput ? testNameInput.value.trim() : "";
         const maxAttempts = maxAttemptsInput ? parseInt(maxAttemptsInput.value, 10) : null;
+        const timeLimit = timeLimitInput ? parseInt(timeLimitInput.value, 10) : null;
+        const testType = testTypeSelect ? testTypeSelect.value : "quiz";
+        const randomizeQuestions = randomizeQuestionsCheckbox ? randomizeQuestionsCheckbox.checked : false;
+        const randomizeOptions = randomizeOptionsCheckbox ? randomizeOptionsCheckbox.checked : false;
 
-        dbg("Create random test clicked, numQuestions=", numQuestions, "testName=", testName, "maxAttempts=", maxAttempts);
+        dbg("Create random test clicked, numQuestions=", numQuestions, "testName=", testName, "maxAttempts=", maxAttempts,
+            "timeLimit=", timeLimit, "testType=", testType, "randomizeQ=", randomizeQuestions, "randomizeO=", randomizeOptions);
         if (isNaN(numQuestions) || numQuestions < 1) {
             randomInfo.textContent = "Enter a valid number of questions (>=1).";
             return;
@@ -621,6 +645,9 @@
                 student_dni: currentDni,
                 course_code: selectedCourse.code,
                 num_questions: numQuestions,
+                test_type: testType,
+                randomize_questions: randomizeQuestions,
+                randomize_options: randomizeOptions,
             };
             // Add title only if provided
             if (testName) {
@@ -630,7 +657,10 @@
             if (!isNaN(maxAttempts) && maxAttempts > 0) {
                 payload.max_attempts = maxAttempts;
             }
-            // If maxAttempts is 0 or empty, don't send it (NULL = unlimited)
+            // Only include time_limit if it's a valid positive number
+            if (!isNaN(timeLimit) && timeLimit > 0) {
+                payload.time_limit_minutes = timeLimit;
+            }
             
             const resp = await fetch("/tests/random_from_bank", {
                 method: "POST",
@@ -657,6 +687,29 @@
         } catch (e) {
             dbg("createRandomTest exception", e);
             randomInfo.textContent = "Error creating test: " + e;
+        }
+    });
+
+    // Share test
+    shareTestBtn.addEventListener("click", async function () {
+        const testId = testSelect.value;
+        dbg("Share test clicked, testId=", testId);
+        if (!testId) {
+            alert("Please select a test first.");
+            return;
+        }
+
+        const shareUrl = `${window.location.origin}/quiz?test_id=${testId}`;
+
+        try {
+            await navigator.clipboard.writeText(shareUrl);
+            shareTestBtn.textContent = "✅ Link Copied!";
+            setTimeout(() => {
+                shareTestBtn.textContent = "🔗 Copy Share Link";
+            }, 2000);
+        } catch (err) {
+            console.error("Failed to copy:", err);
+            prompt("Copy this link to share:", shareUrl);
         }
     });
 
@@ -697,6 +750,169 @@
         btnQuestionBank.addEventListener("click", function () {
             dbg("Question bank button clicked");
             window.location.href = "/question-bank";
+        });
+    }
+
+    // Power Student: browse questions (read-only)
+    if (btnBrowseQuestions) {
+        btnBrowseQuestions.addEventListener("click", function () {
+            dbg("Browse questions button clicked");
+            window.location.href = "/question-bank";
+        });
+    }
+
+    // Suggest question - show form
+    if (btnSuggestQuestion) {
+        btnSuggestQuestion.addEventListener("click", function () {
+            dbg("Suggest question button clicked");
+            suggestQuestionForm.classList.toggle("hidden");
+            if (!suggestQuestionForm.classList.contains("hidden")) {
+                suggestQuestionText.focus();
+            }
+        });
+    }
+
+    // Cancel suggestion
+    if (btnCancelSuggestion) {
+        btnCancelSuggestion.addEventListener("click", function () {
+            suggestQuestionForm.classList.add("hidden");
+            suggestQuestionText.value = "";
+            suggestOptions.forEach(opt => opt.value = "");
+            suggestionResult.textContent = "";
+        });
+    }
+
+    // Submit suggestion
+    if (btnSubmitSuggestion) {
+        btnSubmitSuggestion.addEventListener("click", async function () {
+            dbg("Submit suggestion button clicked");
+
+            const questionText = suggestQuestionText.value.trim();
+            const options = suggestOptions.map(opt => opt.value.trim());
+            const correctIdx = parseInt(document.querySelector('input[name="suggest-correct"]:checked').value);
+
+            // Validation
+            if (!questionText) {
+                suggestionResult.textContent = "Please enter a question.";
+                suggestionResult.style.color = "var(--error)";
+                return;
+            }
+
+            if (options.some(opt => !opt)) {
+                suggestionResult.textContent = "Please fill in all options.";
+                suggestionResult.style.color = "var(--error)";
+                return;
+            }
+
+            if (!currentDni || !selectedCourseId) {
+                suggestionResult.textContent = "Please select a course first.";
+                suggestionResult.style.color = "var(--error)";
+                return;
+            }
+
+            try {
+                btnSubmitSuggestion.disabled = true;
+                btnSubmitSuggestion.textContent = "Submitting...";
+
+                const response = await fetch("/api/question-suggestions", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        student_dni: currentDni,
+                        course_id: selectedCourseId,
+                        question_text: questionText,
+                        options: options.map((text, idx) => ({
+                            text,
+                            is_correct: idx === correctIdx
+                        }))
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    suggestionResult.textContent = data.error;
+                    suggestionResult.style.color = "var(--error)";
+                } else {
+                    suggestionResult.textContent = "✅ " + (data.message || "Suggestion submitted successfully!");
+                    suggestionResult.style.color = "green";
+
+                    // Clear form after successful submission
+                    setTimeout(() => {
+                        suggestQuestionText.value = "";
+                        suggestOptions.forEach(opt => opt.value = "");
+                        suggestionResult.textContent = "";
+                        suggestQuestionForm.classList.add("hidden");
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error("Error submitting suggestion:", error);
+                suggestionResult.textContent = "Failed to submit suggestion";
+                suggestionResult.style.color = "var(--error)";
+            } finally {
+                btnSubmitSuggestion.disabled = false;
+                btnSubmitSuggestion.textContent = "📤 Submit Suggestion";
+            }
+        });
+    }
+
+    // Show weak questions
+    if (btnShowWeakQuestions) {
+        btnShowWeakQuestions.addEventListener("click", async function () {
+            dbg("Show weak questions button clicked");
+
+            if (!currentDni) {
+                weakQuestionsList.innerHTML = "<p>Please load your dashboard first.</p>";
+                return;
+            }
+
+            try {
+                btnShowWeakQuestions.disabled = true;
+                btnShowWeakQuestions.textContent = "Loading...";
+
+                const url = selectedCourseId
+                    ? `/student/${encodeURIComponent(currentDni)}/weak_questions?course_id=${selectedCourseId}`
+                    : `/student/${encodeURIComponent(currentDni)}/weak_questions`;
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.error) {
+                    weakQuestionsList.innerHTML = `<p style="color: var(--error);">${data.error}</p>`;
+                    return;
+                }
+
+                const questions = data.weak_questions || [];
+
+                if (questions.length === 0) {
+                    weakQuestionsList.innerHTML = "<p style='color: var(--text-muted);'>No weak topics found - great job!</p>";
+                } else {
+                    let html = '<div style="max-height: 400px; overflow-y: auto;">';
+                    html += '<table style="width: 100%; border-collapse: collapse;">';
+                    html += '<thead><tr><th style="text-align: left;">Question</th><th>Times Wrong</th><th>Success Rate</th></tr></thead>';
+                    html += '<tbody>';
+
+                    questions.forEach(q => {
+                        const successColor = q.success_rate < 30 ? 'var(--error)' : (q.success_rate < 70 ? 'orange' : 'green');
+                        html += '<tr>';
+                        html += `<td style="padding: 0.5rem;">${q.question_text.substring(0, 100)}${q.question_text.length > 100 ? '...' : ''}</td>`;
+                        html += `<td style="text-align: center; padding: 0.5rem;">${q.times_wrong}</td>`;
+                        html += `<td style="text-align: center; padding: 0.5rem; color: ${successColor};">${q.success_rate}%</td>`;
+                        html += '</tr>';
+                    });
+
+                    html += '</tbody></table></div>';
+                    weakQuestionsList.innerHTML = html;
+                }
+
+                weakQuestionsSection.classList.remove("hidden");
+                btnShowWeakQuestions.textContent = "🔄 Refresh Weak Topics";
+            } catch (error) {
+                console.error("Error loading weak questions:", error);
+                weakQuestionsList.innerHTML = `<p style="color: var(--error);">Failed to load weak topics</p>`;
+            } finally {
+                btnShowWeakQuestions.disabled = false;
+            }
         });
     }
 
