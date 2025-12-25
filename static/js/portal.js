@@ -102,6 +102,7 @@
         }
         dniInput.value = "";
         errorDiv.textContent = "";
+        errorDiv.classList.add("hidden");
         randomInfo.textContent = "";
         podiumInfo.textContent = "";
         deleteTestInfo.textContent = "";
@@ -198,7 +199,15 @@
     let allAttempts = [];
 
     function showError(msg) {
-        errorDiv.textContent = msg;
+        console.log("[DEBUG] showError called with:", msg);
+        console.log("[DEBUG] errorDiv element:", errorDiv);
+        if (errorDiv) {
+            errorDiv.textContent = msg;
+            errorDiv.classList.remove('hidden');
+            console.log("[DEBUG] Error message set successfully");
+        } else {
+            console.error("[DEBUG] errorDiv not found!");
+        }
         dbg("ERROR:", msg);
     }
 
@@ -482,6 +491,7 @@
     // ---------- Load dashboard for DNI ----------
     loadDashboardBtn.addEventListener("click", async function () {
         errorDiv.textContent = "";
+        errorDiv.classList.add("hidden");
         randomInfo.textContent = "";
         podiumInfo.textContent = "";
         deleteTestInfo.textContent = "";
@@ -513,9 +523,12 @@
 
             // Fetch attempts
             const attemptsData = await fetchStudentAttempts(dni);
+            console.log("[DEBUG] attemptsData:", attemptsData);
             if (attemptsData.error) {
+                console.log("[DEBUG] Error detected:", attemptsData.error);
                 // Check if it's a "user not found" error
                 if (attemptsData.error.includes("not found")) {
+                    console.log("[DEBUG] User not found error detected, showing comprehensive message");
                     showError(
                         `⚠️ User not found with DNI: ${dni}\n\n` +
                         `This DNI is not registered in the system.\n\n` +
@@ -526,6 +539,7 @@
                         `Please verify your DNI and try again, or contact support for assistance.`
                     );
                 } else {
+                    console.log("[DEBUG] Generic error, showing:", attemptsData.error);
                     showError(attemptsData.error);
                 }
                 return;
@@ -609,6 +623,7 @@
     // ---------- Start selected test ----------
     startSelectedBtn.addEventListener("click", async function () {
         errorDiv.textContent = "";
+        errorDiv.classList.add("hidden");
         const testId = testSelect.value;
         dbg("Start selected test clicked, testId=", testId);
         if (!testId) {
