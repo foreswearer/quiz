@@ -77,6 +77,7 @@
 
     // ---------- State ----------
     let teacherDni = null;
+    let userRole = null;  // teacher or power_student
     let courses = [];
     let questions = [];
     let selectedCourseId = null;
@@ -278,21 +279,25 @@
             tdOptions.innerHTML = '<span class="options-preview">4 options</span>';
             row.appendChild(tdOptions);
 
-            // Actions
+            // Actions (only for teachers, not power_students)
             const tdActions = document.createElement("td");
             tdActions.className = "action-buttons";
 
-            const editBtn = document.createElement("button");
-            editBtn.className = "btn-small";
-            editBtn.textContent = "✏️ Edit";
-            editBtn.addEventListener("click", () => openEditQuestion(q.id));
-            tdActions.appendChild(editBtn);
+            if (userRole === "teacher") {
+                const editBtn = document.createElement("button");
+                editBtn.className = "btn-small";
+                editBtn.textContent = "✏️ Edit";
+                editBtn.addEventListener("click", () => openEditQuestion(q.id));
+                tdActions.appendChild(editBtn);
 
-            const deleteBtn = document.createElement("button");
-            deleteBtn.className = "btn-small btn-danger";
-            deleteBtn.textContent = "🗑️";
-            deleteBtn.addEventListener("click", () => openDeleteModal(q.id));
-            tdActions.appendChild(deleteBtn);
+                const deleteBtn = document.createElement("button");
+                deleteBtn.className = "btn-small btn-danger";
+                deleteBtn.textContent = "🗑️";
+                deleteBtn.addEventListener("click", () => openDeleteModal(q.id));
+                tdActions.appendChild(deleteBtn);
+            } else {
+                tdActions.textContent = "—";  // Read-only indicator
+            }
 
             row.appendChild(tdActions);
             questionsTableBody.appendChild(row);
@@ -829,7 +834,7 @@
         });
     }
 
-    // ---------- Check Teacher Access ----------
+    // ---------- Check Access (Teacher or Power Student) ----------
     async function checkAccess() {
         teacherDni = getCookie("quiz_dni");
         dbg("Checking access for DNI:", teacherDni);
@@ -839,24 +844,39 @@
             return false;
         }
 
-        // Verify teacher by trying to access teacher dashboard
+        // First try teacher access
         try {
             const resp = await fetch(`/teacher/dashboard_overview?teacher_dni=${encodeURIComponent(teacherDni)}`);
-            if (!resp.ok) {
-                accessDenied.classList.remove("hidden");
-                return false;
+            if (resp.ok) {
+                const data = await resp.json();
+                if (!data.error) {
+                    userRole = "teacher";
+                    dbg("Access granted: teacher");
+                    return true;
+                }
             }
-            const data = await resp.json();
-            if (data.error) {
-                accessDenied.classList.remove("hidden");
-                return false;
-            }
-            return true;
         } catch (e) {
-            dbg("Access check failed:", e);
-            accessDenied.classList.remove("hidden");
-            return false;
+            dbg("Teacher check failed:", e);
         }
+
+        // If not teacher, check if power_student
+        try {
+            const resp = await fetch(`/student/${encodeURIComponent(teacherDni)}/attempts`);
+            if (resp.ok) {
+                const data = await resp.json();
+                if (data.student && data.student.role === "power_student") {
+                    userRole = "power_student";
+                    dbg("Access granted: power_student (read-only)");
+                    return true;
+                }
+            }
+        } catch (e) {
+            dbg("Power student check failed:", e);
+        }
+
+        // No access
+        accessDenied.classList.remove("hidden");
+        return false;
     }
 
     // ---------- Initialize ----------
@@ -874,6 +894,24 @@
         }
 
         mainContent.classList.remove("hidden");
+
+        // Hide edit controls for power_students (read-only mode)
+        if (userRole === "power_student") {
+            dbg("Power student mode: hiding edit controls");
+            // Hide all edit/create/delete controls
+            if (btnNewCourse) btnNewCourse.style.display = "none";
+            if (newCourseForm) newCourseForm.style.display = "none";
+            if (btnAddQuestion) btnAddQuestion.style.display = "none";
+            if (btnUploadJson) btnUploadJson.parentElement.parentElement.style.display = "none";  // Hide entire upload section
+            if (btnDownloadJson) btnDownloadJson.parentElement.parentElement.style.display = "none";  // Hide entire download section
+            if (questionEditor) questionEditor.style.display = "none";
+
+            // Update subtitle to indicate read-only mode
+            const subtitle = document.querySelector(".subtitle");
+            if (subtitle) {
+                subtitle.textContent = "Browse questions (read-only mode for Power Students)";
+            }
+        }
 
         // Force course selector styling
         if (courseSelect) {
