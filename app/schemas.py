@@ -17,3 +17,7 @@ class RandomTestRequest(BaseModel):
     course_code: str = "2526-45810-A"
     title: Optional[str] = None  # Custom test name (optional)
     max_attempts: Optional[int] = None  # None = unlimited attempts
+    time_limit_minutes: Optional[int] = None  # Time limit in minutes
+    test_type: Optional[str] = "quiz"  # quiz, exam, or practice
+    randomize_questions: Optional[bool] = False  # Shuffle question order
+    randomize_options: Optional[bool] = False  # Shuffle answer options

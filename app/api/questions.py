@@ -966,3 +966,85 @@ def upload_questions_from_json(data: dict):
             return result
     finally:
         conn.close()
+
+
+@router.post("/api/question-suggestions")
+def submit_question_suggestion(data: dict):
+    """
+    Submit a question suggestion from a student.
+    Stores suggestions in a JSON file for teacher review.
+    """
+    import json
+    import os
+    from datetime import datetime
+
+    student_dni = data.get("student_dni", "").strip()
+    course_id = data.get("course_id")
+    question_text = data.get("question_text", "").strip()
+    options = data.get("options", [])
+
+    if not student_dni:
+        return {"error": "student_dni is required"}
+    if not course_id:
+        return {"error": "course_id is required"}
+    if not question_text:
+        return {"error": "question_text is required"}
+    if not options or len(options) < 2:
+        return {"error": "At least 2 options are required"}
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # Verify user exists
+            cur.execute("SELECT id, full_name, role FROM users WHERE dni = %s", (student_dni,))
+            user_row = cur.fetchone()
+            if not user_row:
+                return {"error": f"User with DNI {student_dni} not found"}
+
+            user_id, user_name, user_role = user_row
+
+            # Verify course exists
+            cur.execute("SELECT code, name FROM course WHERE id = %s", (course_id,))
+            course_row = cur.fetchone()
+            if not course_row:
+                return {"error": f"Course {course_id} not found"}
+
+            course_code, course_name = course_row
+
+            # Create suggestion object
+            suggestion = {
+                "timestamp": datetime.now().isoformat(),
+                "student_dni": student_dni,
+                "student_name": user_name,
+                "student_role": user_role,
+                "course_id": course_id,
+                "course_code": course_code,
+                "course_name": course_name,
+                "question_text": question_text,
+                "options": options,
+                "status": "pending"  # pending, approved, rejected
+            }
+
+            # Load existing suggestions
+            suggestions_file = "question_suggestions.json"
+            suggestions = []
+            if os.path.exists(suggestions_file):
+                try:
+                    with open(suggestions_file, "r") as f:
+                        suggestions = json.load(f)
+                except:
+                    suggestions = []
+
+            # Append new suggestion
+            suggestions.append(suggestion)
+
+            # Save to file
+            with open(suggestions_file, "w") as f:
+                json.dump(suggestions, f, indent=2)
+
+            return {
+                "message": "Question suggestion submitted successfully! Teachers will review it.",
+                "suggestion_id": len(suggestions) - 1
+            }
+    finally:
+        conn.close()
