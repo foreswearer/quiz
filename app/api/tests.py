@@ -54,13 +54,29 @@ def available_tests():
 def get_test(test_id: int):
     """
     Get a test definition, including questions and options (with is_correct flag).
+    Randomizes questions and/or options if the test configuration specifies it.
     """
+    import random
+
     conn = get_connection()
     try:
         with conn.cursor() as cur:
             test = get_test_info(cur, test_id)
             if test is None:
                 return {"error": f"test {test_id} not found"}
+
+            # Get randomization settings from test
+            cur.execute(
+                """
+                SELECT randomize_questions, randomize_options
+                FROM test
+                WHERE id = %s
+                """,
+                (test_id,),
+            )
+            randomize_row = cur.fetchone()
+            randomize_questions = randomize_row[0] if randomize_row else False
+            randomize_options = randomize_row[1] if randomize_row else False
 
             cur.execute(
                 """
@@ -102,6 +118,13 @@ def get_test(test_id: int):
                         }
                     )
 
+                # Randomize options if configured
+                if randomize_options:
+                    random.shuffle(options)
+                    # Update order_index after shuffling for display purposes
+                    for idx, opt in enumerate(options):
+                        opt["order_index"] = idx + 1
+
                 questions.append(
                     {
                         "id": q_id,
@@ -112,6 +135,13 @@ def get_test(test_id: int):
                         "options": options,
                     }
                 )
+
+            # Randomize questions if configured
+            if randomize_questions:
+                random.shuffle(questions)
+                # Update order_index after shuffling for display purposes
+                for idx, q in enumerate(questions):
+                    q["order_index"] = idx + 1
 
             return {
                 "test": test,
