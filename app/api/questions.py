@@ -996,7 +996,7 @@ def submit_question_suggestion(data: dict):
     try:
         with conn.cursor() as cur:
             # Verify user exists
-            cur.execute("SELECT id, full_name, role FROM users WHERE dni = %s", (student_dni,))
+            cur.execute("SELECT id, full_name, role FROM app_user WHERE dni = %s", (student_dni,))
             user_row = cur.fetchone()
             if not user_row:
                 return {"error": f"User with DNI {student_dni} not found"}
