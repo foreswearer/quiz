@@ -401,12 +401,12 @@ def teacher_dashboard_overview(
                 return {"error": f"DNI {teacher_dni} is not a teacher"}
 
             # 2) Global summary KPIs
-            # total students
+            # total students (distinct students who have taken tests)
             cur.execute(
                 """
-                SELECT COUNT(*) 
-                FROM app_user
-                WHERE role = 'student'
+                SELECT COUNT(DISTINCT student_id)
+                FROM test_attempt
+                WHERE status = 'graded'
                 """
             )
             total_students = cur.fetchone()[0] or 0
