@@ -996,7 +996,10 @@ def submit_question_suggestion(data: dict):
     try:
         with conn.cursor() as cur:
             # Verify user exists
-            cur.execute("SELECT id, full_name, role FROM app_user WHERE dni = %s", (student_dni,))
+            cur.execute(
+                "SELECT id, full_name, role FROM app_user WHERE dni = %s",
+                (student_dni,),
+            )
             user_row = cur.fetchone()
             if not user_row:
                 return {"error": f"User with DNI {student_dni} not found"}
@@ -1022,7 +1025,7 @@ def submit_question_suggestion(data: dict):
                 "course_name": course_name,
                 "question_text": question_text,
                 "options": options,
-                "status": "pending"  # pending, approved, rejected
+                "status": "pending",  # pending, approved, rejected
             }
 
             # Load existing suggestions
@@ -1044,7 +1047,7 @@ def submit_question_suggestion(data: dict):
 
             return {
                 "message": "Question suggestion submitted successfully! Teachers will review it.",
-                "suggestion_id": len(suggestions) - 1
+                "suggestion_id": len(suggestions) - 1,
             }
     finally:
         conn.close()
