@@ -1032,7 +1032,7 @@ def submit_question_suggestion(data: dict):
                 try:
                     with open(suggestions_file, "r") as f:
                         suggestions = json.load(f)
-                except:
+                except (json.JSONDecodeError, IOError):
                     suggestions = []
 
             # Append new suggestion
