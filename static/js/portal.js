@@ -534,7 +534,8 @@
                         `This DNI is not registered in the system.\n\n` +
                         `Possible reasons:\n` +
                         `• You may have entered the wrong DNI (check for typos)\n` +
-                        `• Your account might not be created yet\n` +
+                        `• You may have given your passport number, try with it\n` +
+                        `• You may have a non-spanish DNI, but a NIE, try with it\n` +
                         `• You may need to contact your teacher or administrator\n\n` +
                         `Please verify your DNI and try again, or contact support for assistance.`
                     );
