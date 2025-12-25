@@ -634,22 +634,32 @@ def get_student_weak_questions(dni: str, course_id: Optional[int] = Query(None))
 
             weak_questions = []
             for row in rows:
-                q_id, q_text, c_id, c_code, c_name, times_wrong, times_correct, total = row
-                weak_questions.append({
-                    "question_id": q_id,
-                    "question_text": q_text,
-                    "course_id": c_id,
-                    "course_code": c_code,
-                    "course_name": c_name,
-                    "times_wrong": int(times_wrong),
-                    "times_correct": int(times_correct),
-                    "total_attempts": int(total),
-                    "success_rate": round((times_correct / total * 100) if total > 0 else 0, 1)
-                })
+                (
+                    q_id,
+                    q_text,
+                    c_id,
+                    c_code,
+                    c_name,
+                    times_wrong,
+                    times_correct,
+                    total,
+                ) = row
+                weak_questions.append(
+                    {
+                        "question_id": q_id,
+                        "question_text": q_text,
+                        "course_id": c_id,
+                        "course_code": c_code,
+                        "course_name": c_name,
+                        "times_wrong": int(times_wrong),
+                        "times_correct": int(times_correct),
+                        "total_attempts": int(total),
+                        "success_rate": round(
+                            (times_correct / total * 100) if total > 0 else 0, 1
+                        ),
+                    }
+                )
 
-            return {
-                "student": user,
-                "weak_questions": weak_questions
-            }
+            return {"student": user, "weak_questions": weak_questions}
     finally:
         conn.close()

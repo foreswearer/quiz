@@ -142,8 +142,6 @@
     const maxAttemptsInput = document.getElementById("max-attempts");
     const timeLimitInput = document.getElementById("time-limit");
     const testTypeSelect = document.getElementById("test-type");
-    const randomizeQuestionsCheckbox = document.getElementById("randomize-questions");
-    const randomizeOptionsCheckbox = document.getElementById("randomize-options");
     const createRandomBtn = document.getElementById("create-random-test");
     const randomInfo = document.getElementById("random-info");
     const attemptsEmpty = document.getElementById("attempts-empty");
@@ -622,8 +620,8 @@
         const maxAttempts = maxAttemptsInput ? parseInt(maxAttemptsInput.value, 10) : null;
         const timeLimit = timeLimitInput ? parseInt(timeLimitInput.value, 10) : null;
         const testType = testTypeSelect ? testTypeSelect.value : "quiz";
-        const randomizeQuestions = randomizeQuestionsCheckbox ? randomizeQuestionsCheckbox.checked : false;
-        const randomizeOptions = randomizeOptionsCheckbox ? randomizeOptionsCheckbox.checked : false;
+        const randomizeQuestions = true;  // Always randomize questions
+        const randomizeOptions = true;    // Always randomize options
 
         dbg("Create random test clicked, numQuestions=", numQuestions, "testName=", testName, "maxAttempts=", maxAttempts,
             "timeLimit=", timeLimit, "testType=", testType, "randomizeQ=", randomizeQuestions, "randomizeO=", randomizeOptions);
