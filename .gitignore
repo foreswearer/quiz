@@ -14,3 +14,4 @@ production/
 /amend_develop.ps1
 /amend_main.ps1
 /amend_*.ps1
+/docs/db_to_local.md
