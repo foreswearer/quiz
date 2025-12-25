@@ -111,6 +111,12 @@ th {
     color: #b91c1c;
     margin-top: 0.5rem;
     font-size: 0.9rem;
+    white-space: pre-line;
+    line-height: 1.5;
+    padding: 0.75rem;
+    background-color: #fee;
+    border-left: 4px solid #b91c1c;
+    border-radius: 4px;
 }
 
 #random-info {
@@ -128,4 +134,10 @@ body.dark #course-select {
 body.dark #course-select option {
     background-color: #020617;
     color: #93c5fd;
+}
+
+body.dark #error {
+    background-color: #3f1c1c;
+    border-left-color: #ef4444;
+    color: #fca5a5;
 }

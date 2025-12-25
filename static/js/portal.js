@@ -514,7 +514,20 @@
             // Fetch attempts
             const attemptsData = await fetchStudentAttempts(dni);
             if (attemptsData.error) {
-                showError(attemptsData.error);
+                // Check if it's a "user not found" error
+                if (attemptsData.error.includes("not found")) {
+                    showError(
+                        `⚠️ User not found with DNI: ${dni}\n\n` +
+                        `This DNI is not registered in the system.\n\n` +
+                        `Possible reasons:\n` +
+                        `• You may have entered the wrong DNI (check for typos)\n` +
+                        `• Your account might not be created yet\n` +
+                        `• You may need to contact your teacher or administrator\n\n` +
+                        `Please verify your DNI and try again, or contact support for assistance.`
+                    );
+                } else {
+                    showError(attemptsData.error);
+                }
                 return;
             }
 
