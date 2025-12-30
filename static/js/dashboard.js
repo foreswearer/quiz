@@ -78,12 +78,32 @@ async function checkTeacherAccess() {
 }
 
 // =======================
+// Fetch courses
+// =======================
+
+async function fetchCourses() {
+    try {
+        const response = await fetch('/courses');
+        const data = await response.json();
+        return data.courses || [];
+    } catch (error) {
+        console.error('Failed to fetch courses:', error);
+        return [];
+    }
+}
+
+// =======================
 // Fetch dashboard data
 // =======================
 
-async function fetchDashboardData() {
+async function fetchDashboardData(courseId = null) {
     try {
-        const response = await fetch(`/teacher/dashboard_overview?teacher_dni=${encodeURIComponent(teacherDNI)}`);
+        let url = `/teacher/dashboard_overview?teacher_dni=${encodeURIComponent(teacherDNI)}`;
+        if (courseId) {
+            url += `&course_id=${courseId}`;
+        }
+
+        const response = await fetch(url);
         const data = await response.json();
 
         if (data.error) {
@@ -332,16 +352,32 @@ function populateTestSummaryTable(data) {
 }
 
 // =======================
-// Initialize dashboard
+// Initialize course filter
 // =======================
 
-async function initDashboard() {
-    // Check access
-    const hasAccess = await checkTeacherAccess();
-    if (!hasAccess) return;
+async function initCourseFilter() {
+    const courses = await fetchCourses();
+    const select = document.getElementById('course-filter');
 
-    // Fetch data
-    const data = await fetchDashboardData();
+    courses.forEach(course => {
+        const option = document.createElement('option');
+        option.value = course.id;
+        option.textContent = `${course.code} - ${course.name}`;
+        select.appendChild(option);
+    });
+
+    select.addEventListener('change', async () => {
+        const courseId = select.value || null;
+        await loadDashboard(courseId);
+    });
+}
+
+// =======================
+// Load dashboard with optional course filter
+// =======================
+
+async function loadDashboard(courseId = null) {
+    const data = await fetchDashboardData(courseId);
     if (!data) return;
 
     // Populate everything
@@ -352,6 +388,22 @@ async function initDashboard() {
     populateTestSummaryTable(data);
 
     hideError();
+}
+
+// =======================
+// Initialize dashboard
+// =======================
+
+async function initDashboard() {
+    // Check access
+    const hasAccess = await checkTeacherAccess();
+    if (!hasAccess) return;
+
+    // Initialize course filter
+    await initCourseFilter();
+
+    // Load initial dashboard data (all courses)
+    await loadDashboard();
 }
 
 // =======================
