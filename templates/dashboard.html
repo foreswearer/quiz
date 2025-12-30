@@ -39,6 +39,22 @@
         .page {
             padding-bottom: 3rem;
         }
+        .course-filter-card {
+            margin-bottom: 1rem;
+        }
+        .course-filter-card label {
+            font-weight: 600;
+            margin-right: 0.5rem;
+        }
+        .course-filter-card select {
+            padding: 0.5rem;
+            font-size: 1rem;
+            border-radius: 0.25rem;
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            color: var(--text-color);
+            min-width: 300px;
+        }
     </style>
 </head>
 <body>
@@ -54,6 +70,14 @@
                 <button class="toolbar-btn" id="end-session-btn">End Session</button>
                 <button class="theme-toggle" id="theme-toggle">🌙</button>
             </div>
+        </div>
+
+        <!-- Course Filter -->
+        <div class="card course-filter-card">
+            <label for="course-filter">Filter by Course:</label>
+            <select id="course-filter">
+                <option value="">All Courses</option>
+            </select>
         </div>
 
         <!-- Summary KPIs -->

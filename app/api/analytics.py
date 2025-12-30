@@ -380,6 +380,7 @@ def test_analytics(test_id: int):
 @router.get("/teacher/dashboard_overview")
 def teacher_dashboard_overview(
     teacher_dni: str = Query(..., description="Teacher DNI (must have role='teacher')"),
+    course_id: Optional[int] = Query(None, description="Filter by course ID (optional)"),
 ):
     """
     High-level teacher dashboard overview.
@@ -389,6 +390,8 @@ def teacher_dashboard_overview(
       - tests: per-test stats
       - attempts_over_time: daily attempts and average percentage
       - hardest_questions: questions with the highest wrong rate
+
+    Optional course_id parameter filters all data by specific course.
     """
     conn = get_connection()
     try:
@@ -400,43 +403,73 @@ def teacher_dashboard_overview(
             if user["role"] != "teacher":
                 return {"error": f"DNI {teacher_dni} is not a teacher"}
 
+            # Build course filter clause
+            course_filter = ""
+            course_params = []
+            if course_id is not None:
+                course_filter = " AND t.course_id = %s"
+                course_params = [course_id]
+
             # 2) Global summary KPIs
-            # total students (distinct students who have taken tests)
+            # total students (distinct students who have taken tests, optionally filtered by course)
             cur.execute(
                 """
-                SELECT COUNT(DISTINCT student_id)
-                FROM test_attempt
-                WHERE status = 'graded'
+                SELECT COUNT(DISTINCT ta.student_id)
+                FROM test_attempt ta
+                JOIN test t ON t.id = ta.test_id
+                WHERE ta.status = 'graded'
                 """
+                + course_filter,
+                course_params,
             )
             total_students = cur.fetchone()[0] or 0
 
-            # total tests
-            cur.execute("SELECT COUNT(*) FROM test")
+            # total tests (optionally filtered by course)
+            if course_id is not None:
+                cur.execute(
+                    "SELECT COUNT(*) FROM test WHERE course_id = %s", [course_id]
+                )
+            else:
+                cur.execute("SELECT COUNT(*) FROM test")
             total_tests = cur.fetchone()[0] or 0
 
-            # total attempts
-            cur.execute("SELECT COUNT(*) FROM test_attempt")
-            total_attempts = cur.fetchone()[0] or 0
-
-            # attempts last 7 days (graded)
+            # total attempts (optionally filtered by course)
             cur.execute(
                 """
                 SELECT COUNT(*)
-                FROM test_attempt
-                WHERE status = 'graded'
-                  AND submitted_at >= NOW() - INTERVAL '7 days'
+                FROM test_attempt ta
+                JOIN test t ON t.id = ta.test_id
+                WHERE 1=1
                 """
+                + course_filter,
+                course_params,
+            )
+            total_attempts = cur.fetchone()[0] or 0
+
+            # attempts last 7 days (graded, optionally filtered by course)
+            cur.execute(
+                """
+                SELECT COUNT(*)
+                FROM test_attempt ta
+                JOIN test t ON t.id = ta.test_id
+                WHERE ta.status = 'graded'
+                  AND ta.submitted_at >= NOW() - INTERVAL '7 days'
+                """
+                + course_filter,
+                course_params,
             )
             attempts_last_7_days = cur.fetchone()[0] or 0
 
-            # average percentage (graded attempts only)
+            # average percentage (graded attempts only, optionally filtered by course)
             cur.execute(
                 """
-                SELECT AVG(percentage)
-                FROM test_attempt
-                WHERE status = 'graded'
+                SELECT AVG(ta.percentage)
+                FROM test_attempt ta
+                JOIN test t ON t.id = ta.test_id
+                WHERE ta.status = 'graded'
                 """
+                + course_filter,
+                course_params,
             )
             avg_percentage_row = cur.fetchone()[0]
             avg_percentage = (
@@ -456,7 +489,7 @@ def teacher_dashboard_overview(
                 "avg_percentage": avg_percentage,
             }
 
-            # 3) Per-test stats
+            # 3) Per-test stats (optionally filtered by course)
             cur.execute(
                 """
                 SELECT
@@ -470,9 +503,14 @@ def teacher_dashboard_overview(
                 LEFT JOIN test_attempt ta
                     ON ta.test_id = t.id
                    AND ta.status = 'graded'
+                WHERE 1=1
+                """
+                + course_filter
+                + """
                 GROUP BY t.id, t.title
                 ORDER BY t.id
-                """
+                """,
+                course_params,
             )
             rows = cur.fetchall()
             tests: List[Dict[str, Any]] = []
@@ -501,18 +539,23 @@ def teacher_dashboard_overview(
                     }
                 )
 
-            # 4) Attempts over time (graded attempts per day)
+            # 4) Attempts over time (graded attempts per day, optionally filtered by course)
             cur.execute(
                 """
                 SELECT
-                    DATE_TRUNC('day', submitted_at)::date AS day,
+                    DATE_TRUNC('day', ta.submitted_at)::date AS day,
                     COUNT(*) AS attempts,
-                    AVG(percentage) AS avg_percentage
-                FROM test_attempt
-                WHERE status = 'graded'
-                GROUP BY DATE_TRUNC('day', submitted_at)::date
-                ORDER BY day
+                    AVG(ta.percentage) AS avg_percentage
+                FROM test_attempt ta
+                JOIN test t ON t.id = ta.test_id
+                WHERE ta.status = 'graded'
                 """
+                + course_filter
+                + """
+                GROUP BY DATE_TRUNC('day', ta.submitted_at)::date
+                ORDER BY day
+                """,
+                course_params,
             )
             rows = cur.fetchall()
             attempts_over_time: List[Dict[str, Any]] = []
@@ -527,7 +570,7 @@ def teacher_dashboard_overview(
                     }
                 )
 
-            # 5) Hardest questions (highest wrong rate across all tests)
+            # 5) Hardest questions (highest wrong rate, optionally filtered by course)
             cur.execute(
                 """
                 SELECT
@@ -539,12 +582,17 @@ def teacher_dashboard_overview(
                 FROM student_answer sa
                 JOIN question_bank qb ON qb.id = sa.question_id
                 JOIN test_attempt ta ON ta.id = sa.attempt_id
+                JOIN test t ON t.id = ta.test_id
                 WHERE ta.status = 'graded'
+                """
+                + course_filter
+                + """
                 GROUP BY sa.question_id, qb.question_text
                 HAVING COUNT(*) > 0
                 ORDER BY wrong_count DESC
                 LIMIT 10
-                """
+                """,
+                course_params,
             )
             rows = cur.fetchall()
             hardest_questions: List[Dict[str, Any]] = []
