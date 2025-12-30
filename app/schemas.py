@@ -22,7 +22,7 @@ class RandomTestRequest(BaseModel):
     randomize_questions: Optional[bool] = False  # Shuffle question order
     randomize_options: Optional[bool] = False  # Shuffle answer options
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def set_defaults_by_test_type(self):
         """
         Apply default values based on test type if not explicitly provided.
