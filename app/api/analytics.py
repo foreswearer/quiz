@@ -380,7 +380,9 @@ def test_analytics(test_id: int):
 @router.get("/teacher/dashboard_overview")
 def teacher_dashboard_overview(
     teacher_dni: str = Query(..., description="Teacher DNI (must have role='teacher')"),
-    course_id: Optional[int] = Query(None, description="Filter by course ID (optional)"),
+    course_id: Optional[int] = Query(
+        None, description="Filter by course ID (optional)"
+    ),
 ):
     """
     High-level teacher dashboard overview.
