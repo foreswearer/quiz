@@ -392,6 +392,25 @@ Automated pipeline:
    - Start test button
    - View podium button
    - Create random test (specify number of questions)
+   - **Test Types**: Quiz, Practice, or Exam (see Test Types section below)
+
+   **Test Types**
+
+   When creating a random test, users can choose between three test types, each with different behaviors:
+
+   | Test Type | Attempts | Time Limit | Purpose |
+   |-----------|----------|------------|---------|
+   | **Practice** | Unlimited | None | Self-paced learning and practice. No pressure, answers shown immediately after submission. |
+   | **Quiz** | 2 attempts (default) | 30 minutes (default) | Regular formative assessment. Moderate time limit, limited retries. |
+   | **Exam** | 1 attempt only | 60 minutes (default) | High-stakes summative evaluation. Single attempt with strict time limit. |
+
+   **Test Type Features:**
+   - **Attempt Enforcement**: Backend prevents starting new attempts once limit is reached
+   - **Time Limit Display**: Visual timer shows remaining time during test (changes color when < 10 min)
+   - **Auto-Submit**: Test automatically submits when time expires
+   - **Time Limit Enforcement**: Backend rejects submissions exceeding time limit
+   - **Retry Feedback**: After submission, shows remaining attempts if available
+   - **Custom Overrides**: Users can customize attempts/time when creating test (overrides defaults)
 
 4. **My Attempts Section**
    - Table with Date, Test, Attempt#, Score, %, Status
