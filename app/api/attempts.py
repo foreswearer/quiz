@@ -16,6 +16,7 @@ def start_test(
     """
     Start a test attempt for the user identified by DNI.
     Teachers can also start attempts (for self-testing).
+    Enforces max_attempts limit based on test configuration.
     """
     conn = get_connection()
     try:
@@ -31,16 +32,37 @@ def start_test(
             if test is None:
                 return {"error": f"test {test_id} not found"}
 
-            # Next attempt number
+            # Get test configuration including max_attempts and test_type
             cur.execute(
                 """
-                SELECT COALESCE(MAX(attempt_number), 0) + 1
+                SELECT max_attempts, test_type, time_limit_minutes
+                FROM test
+                WHERE id = %s
+                """,
+                (test_id,),
+            )
+            test_config = cur.fetchone()
+            max_attempts = test_config[0] if test_config else None
+            test_type = test_config[1] if test_config else "quiz"
+            time_limit_minutes = test_config[2] if test_config else None
+
+            # Check existing attempts
+            cur.execute(
+                """
+                SELECT COALESCE(MAX(attempt_number), 0)
                 FROM test_attempt
                 WHERE test_id = %s AND student_id = %s
                 """,
                 (test_id, student_id),
             )
-            attempt_number = cur.fetchone()[0]
+            current_max_attempt = cur.fetchone()[0]
+            attempt_number = current_max_attempt + 1
+
+            # Enforce attempt limit (None means unlimited)
+            if max_attempts is not None and current_max_attempt >= max_attempts:
+                return {
+                    "error": f"Maximum attempts ({max_attempts}) reached for this {test_type}. You have used all available attempts."
+                }
 
             # Max score: 0.5 per question
             cur.execute(
@@ -122,6 +144,9 @@ def start_test(
             return {
                 "attempt_id": attempt_id,
                 "attempt_number": attempt_number,
+                "max_attempts": max_attempts,
+                "time_limit_minutes": time_limit_minutes,
+                "test_type": test_type,
                 "student": {
                     "id": user["id"],
                     "name": user["full_name"],
@@ -147,14 +172,17 @@ def submit_attempt(attempt_id: int, payload: SubmitRequest):
       - incorrect: -1 / num_options
       - unanswered: 0
     Returns per-question details for UI highlighting.
+    Enforces time limits based on test configuration.
     """
+    from datetime import datetime, timezone
+
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            # Attempt info
+            # Attempt info with started_at
             cur.execute(
                 """
-                SELECT test_id, student_id, status, max_score
+                SELECT test_id, student_id, status, max_score, started_at
                 FROM test_attempt
                 WHERE id = %s
                 """,
@@ -164,11 +192,32 @@ def submit_attempt(attempt_id: int, payload: SubmitRequest):
             if row is None:
                 return {"error": f"attempt {attempt_id} not found"}
 
-            test_id, student_id, status, max_score = row
+            test_id, student_id, status, max_score, started_at = row
             if status != "in_progress":
                 return {
                     "error": f"attempt {attempt_id} is not in progress (status={status})"
                 }
+
+            # Check time limit
+            cur.execute(
+                """
+                SELECT time_limit_minutes, test_type
+                FROM test
+                WHERE id = %s
+                """,
+                (test_id,),
+            )
+            test_config = cur.fetchone()
+            time_limit_minutes = test_config[0] if test_config else None
+            test_type = test_config[1] if test_config else "quiz"
+
+            if time_limit_minutes is not None and started_at is not None:
+                now = datetime.now(timezone.utc)
+                elapsed_minutes = (now - started_at).total_seconds() / 60.0
+                if elapsed_minutes > time_limit_minutes:
+                    return {
+                        "error": f"Time limit exceeded. This {test_type} had a {time_limit_minutes}-minute limit, and {elapsed_minutes:.1f} minutes have elapsed."
+                    }
 
             # If no max_score yet, compute from number of questions
             if max_score is None:
