@@ -101,6 +101,10 @@
     let currentDni = null;
     let currentQuestions = [];
     let quizInitialized = false;
+    let timerInterval = null;
+    let testEndTime = null;
+    let currentMaxAttempts = null;
+    let currentAttemptNumber = null;
 
     function showError(msg) {
         console.error("[quiz] ERROR:", msg);
@@ -231,7 +235,7 @@
     function showMaxAttemptsError(maxAttempts, currentAttempts) {
         const container = document.getElementById("quiz-container");
         if (!container) return;
-        
+
         container.innerHTML = `
             <h2>Maximum Attempts Reached</h2>
             <p style="color: var(--danger-color); margin: 1rem 0;">
@@ -244,6 +248,96 @@
                 </button>
             </div>
         `;
+    }
+
+    // ---------- Time limit display and enforcement ----------
+    function startTimer(timeLimitMinutes) {
+        if (!timeLimitMinutes || timeLimitMinutes <= 0) {
+            dbg("No time limit set for this test");
+            return;
+        }
+
+        // Calculate end time
+        testEndTime = new Date(Date.now() + timeLimitMinutes * 60 * 1000);
+        dbg("Test ends at:", testEndTime);
+
+        // Create timer display element
+        let timerElem = document.getElementById("timer-display");
+        if (!timerElem) {
+            timerElem = document.createElement("div");
+            timerElem.id = "timer-display";
+            timerElem.style.cssText = `
+                background: var(--card-bg);
+                border: 2px solid var(--primary-color);
+                border-radius: 0.5rem;
+                padding: 0.75rem;
+                margin: 1rem 0;
+                font-size: 1.1rem;
+                font-weight: 600;
+                text-align: center;
+            `;
+
+            // Insert before quiz form
+            if (quizForm && quizForm.parentNode) {
+                quizForm.parentNode.insertBefore(timerElem, quizForm);
+            }
+        }
+
+        // Update timer every second
+        updateTimer();
+        timerInterval = setInterval(updateTimer, 1000);
+    }
+
+    function updateTimer() {
+        if (!testEndTime) return;
+
+        const timerElem = document.getElementById("timer-display");
+        if (!timerElem) return;
+
+        const now = new Date();
+        const remainingMs = testEndTime - now;
+
+        if (remainingMs <= 0) {
+            // Time's up!
+            clearInterval(timerInterval);
+            timerElem.innerHTML = "⏰ <span style='color: var(--danger-color);'>TIME'S UP!</span>";
+            timerElem.style.borderColor = "var(--danger-color)";
+
+            // Auto-submit the test
+            dbg("Time limit reached, auto-submitting...");
+            setTimeout(() => {
+                if (quizForm && !quizForm.classList.contains("submitted")) {
+                    quizForm.classList.add("submitted");
+                    submitQuiz(new Event("submit"));
+                }
+            }, 1000);
+            return;
+        }
+
+        // Calculate remaining time
+        const totalSeconds = Math.floor(remainingMs / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+
+        // Change color when time is running out
+        let timeColor = "var(--text-color)";
+        if (minutes < 5) {
+            timeColor = "var(--danger-color)";
+            timerElem.style.borderColor = "var(--danger-color)";
+        } else if (minutes < 10) {
+            timeColor = "var(--warning-color, orange)";
+            timerElem.style.borderColor = "var(--warning-color, orange)";
+        }
+
+        const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        timerElem.innerHTML = `⏱️ Time Remaining: <span style="color: ${timeColor};">${timeStr}</span>`;
+    }
+
+    function stopTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
     }
 
     // ---------- Backend calls ----------
@@ -562,11 +656,19 @@
             const perQuestion = data.details || data.per_question || [];
             dbg("submitQuiz() perQuestion for feedback:", perQuestion);
             applyFeedback(perQuestion);
-            
-            // Check if retry is available and show button
-            // We need to fetch attempt info again or use stored data
-            // For now, always show retry (the start will check max_attempts)
-            showRetryButton(true, null, null);
+
+            // Stop timer if running
+            stopTimer();
+
+            // Calculate if retry is available
+            let canRetry = true;
+            let attemptsRemaining = null;
+            if (currentMaxAttempts !== null && currentMaxAttempts !== undefined) {
+                attemptsRemaining = currentMaxAttempts - currentAttemptNumber;
+                canRetry = attemptsRemaining > 0;
+            }
+
+            showRetryButton(canRetry, attemptsRemaining, currentMaxAttempts);
             
         } catch (e) {
             showError("Error submitting answers: " + e);
@@ -620,13 +722,28 @@
             
             currentAttemptId = data.attempt_id;
             dbg("Current attempt_id =", currentAttemptId);
-            
+
+            // Store attempt data for retry logic
+            currentMaxAttempts = data.max_attempts;
+            currentAttemptNumber = data.attempt_number;
+
+            // Calculate attempts remaining
+            let attemptsRemaining = null;
+            if (currentMaxAttempts !== null && currentMaxAttempts !== undefined) {
+                attemptsRemaining = currentMaxAttempts - currentAttemptNumber;
+            }
+
             // Show attempt info
             showAttemptInfo(
                 data.attempt_number,
                 data.max_attempts,
-                data.attempts_remaining
+                attemptsRemaining
             );
+
+            // Start timer if there's a time limit
+            if (data.time_limit_minutes) {
+                startTimer(data.time_limit_minutes);
+            }
 
             let test = null;
 
