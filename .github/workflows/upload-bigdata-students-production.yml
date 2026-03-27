@@ -15,6 +15,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
+            set -e
             cd /home/ramiro_rego/quiz-backend
             echo "Running BigData III: Visualization student upload on production..."
             venv/bin/python upload_bigdata_students.py

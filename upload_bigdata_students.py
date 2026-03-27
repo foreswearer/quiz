@@ -65,7 +65,7 @@ STUDENTS = [
 
 
 def get_or_create_course(cur):
-    cur.execute("SELECT id FROM course WHERE name = %s", (COURSE_NAME,))
+    cur.execute("SELECT id FROM course WHERE code = %s", (COURSE_CODE,))
     row = cur.fetchone()
     if row:
         course_id = row[0]
