@@ -77,7 +77,10 @@ BEGIN
     INSERT INTO course_enrollment (course_id, user_id, role_in_course)
     SELECT v_course_id, id, 'student'
     FROM all_users
-    ON CONFLICT DO NOTHING;
+    WHERE NOT EXISTS (
+        SELECT 1 FROM course_enrollment ce
+        WHERE ce.course_id = v_course_id AND ce.user_id = all_users.id
+    );
 
     RAISE NOTICE 'Done.';
 END;
