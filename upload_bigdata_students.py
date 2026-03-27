@@ -83,7 +83,14 @@ def get_or_create_course(cur):
         VALUES (%s, %s, %s, %s, %s, %s, true)
         RETURNING id
         """,
-        (COURSE_CODE, COURSE_NAME, COURSE_DESCRIPTION, owner_id, ACADEMIC_YEAR, CLASS_GROUP),
+        (
+            COURSE_CODE,
+            COURSE_NAME,
+            COURSE_DESCRIPTION,
+            owner_id,
+            ACADEMIC_YEAR,
+            CLASS_GROUP,
+        ),
     )
     course_id = cur.fetchone()[0]
     print(f"Created course '{COURSE_NAME}' with id={course_id}")
