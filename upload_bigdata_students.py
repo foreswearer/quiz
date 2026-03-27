@@ -1,5 +1,5 @@
 """
-Upload students for course "BigData III: Visualization".
+Upload students for course "Big Data III: Visualization".
 
 This script is idempotent:
 - Creates the course if it does not already exist (looked up by name).
@@ -14,9 +14,9 @@ sys.path.append(os.getcwd())
 
 from app.db import get_connection  # noqa: E402
 
-COURSE_NAME = "BigData III: Visualization"
-COURSE_CODE = "2526-BIGDATA3-A"
-COURSE_DESCRIPTION = "BigData III: Visualization, grupo A"
+COURSE_NAME = "Big Data III: Visualization"
+COURSE_CODE = "2526-ANBA-3-5354-A"
+COURSE_DESCRIPTION = "Curso de visualización, grupo A inglés"
 ACADEMIC_YEAR = 2526
 CLASS_GROUP = "A"
 
