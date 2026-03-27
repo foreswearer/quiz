@@ -1,0 +1,21 @@
+name: Upload BigData Students (Production)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  upload:
+    name: Upload BigData III Students to Production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Upload BigData Students
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /home/ramiro_rego/quiz-backend
+            echo "Running BigData III: Visualization student upload on production..."
+            venv/bin/python upload_bigdata_students.py
+            echo "Upload complete!"
