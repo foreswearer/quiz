@@ -228,7 +228,10 @@
 
     async function fetchAvailableTests() {
         dbg("fetchAvailableTests() start");
-        const resp = await fetch("/available_tests");
+        const url = currentDni
+            ? `/available_tests?student_dni=${encodeURIComponent(currentDni)}`
+            : "/available_tests";
+        const resp = await fetch(url);
         dbg("fetchAvailableTests() status", resp.status);
         if (!resp.ok) {
             const txt = await resp.text();
