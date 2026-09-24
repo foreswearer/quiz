@@ -9,9 +9,13 @@ router = APIRouter()
 
 
 @router.get("/available_tests")
-def available_tests():
+def available_tests(student_dni: str = Query(default=None)):
     """
-    List all tests with basic information and number of questions.
+    List tests with basic information and number of questions.
+
+    If student_dni is given, only tests belonging to courses that student is
+    enrolled in are returned. Without it, every test is returned (used by the
+    teacher dashboard).
     """
     conn = get_connection()
     try:
@@ -27,9 +31,17 @@ def available_tests():
                     COUNT(tq.question_id) AS num_questions
                 FROM test t
                 LEFT JOIN test_question tq ON tq.test_id = t.id
+                WHERE %s::text IS NULL
+                   OR t.course_id IN (
+                        SELECT e.course_id
+                        FROM course_enrollment e
+                        JOIN app_user u ON u.id = e.user_id
+                        WHERE u.dni = %s
+                   )
                 GROUP BY t.id, t.course_id, t.title, t.description, t.total_points
                 ORDER BY t.id
-                """
+                """,
+                (student_dni, student_dni),
             )
             rows = cur.fetchall()
 
