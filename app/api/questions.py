@@ -104,17 +104,30 @@ def _fetch_question_with_options(cur, question_id: int) -> Optional[Dict[str, An
 
 
 @router.get("/courses")
-def list_courses():
-    """List all courses."""
+def list_courses(student_dni: str = Query(default=None)):
+    """
+    List courses.
+
+    If student_dni is given, only the courses that student is enrolled in are
+    returned. Without it, every course is returned (teacher views).
+    """
     conn = get_connection()
     try:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 SELECT id, code, name, description, academic_year, class_group, is_active
-                FROM course
+                FROM course c
+                WHERE %s::text IS NULL
+                   OR c.id IN (
+                        SELECT e.course_id
+                        FROM course_enrollment e
+                        JOIN app_user u ON u.id = e.user_id
+                        WHERE u.dni = %s
+                   )
                 ORDER BY id
-                """
+                """,
+                (student_dni, student_dni),
             )
             rows = cur.fetchall()
             courses = [

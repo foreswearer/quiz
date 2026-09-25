@@ -214,7 +214,10 @@
     // ---------- API helpers ----------
     async function fetchCourses() {
         dbg("fetchCourses() start");
-        const resp = await fetch("/courses");
+        const coursesUrl = currentDni
+            ? `/courses?student_dni=${encodeURIComponent(currentDni)}`
+            : "/courses";
+        const resp = await fetch(coursesUrl);
         dbg("fetchCourses() status", resp.status);
         if (!resp.ok) {
             const txt = await resp.text();
@@ -228,10 +231,7 @@
 
     async function fetchAvailableTests() {
         dbg("fetchAvailableTests() start");
-        const url = currentDni
-            ? `/available_tests?student_dni=${encodeURIComponent(currentDni)}`
-            : "/available_tests";
-        const resp = await fetch(url);
+        const resp = await fetch("/available_tests");
         dbg("fetchAvailableTests() status", resp.status);
         if (!resp.ok) {
             const txt = await resp.text();
